@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+langchain
+langchain-community
+langgraph
+faiss-cpu
+sentence-transformers
+pydantic-settings
+pytest
