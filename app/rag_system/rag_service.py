@@ -1,28 +1,23 @@
 from app.rag_system.vector_store import VectorStore
-from app.rag_system.llm_clients import get_llm
+from app.rag_system.ingestion import load_and_chunk_docs
+from app.rag_system.rag_pipeline import RAGPipeline
 
 vector_store = VectorStore()
-llm = get_llm()
+rag_pipeline: RAGPipeline | None = None
 
 
-def initialize_rag(documents):
+async def initialize_rag(data_dir: str):
+    global rag_pipeline
+
+    documents = load_and_chunk_docs(data_dir)
     vector_store.build(documents)
 
+    rag_pipeline = RAGPipeline(vector_store)
+    print("RAG pipeline initialized")
 
-def get_answer(query: str) -> str:
-    docs = vector_store.similarity_search(query)
-    context = "\n".join([d.page_content for d in docs])
 
-    prompt = f"""
-You are a RAG-based AI system.
+async def get_rag_answer(question: str):
+    if not rag_pipeline:
+        raise RuntimeError("RAG pipeline not initialized")
 
-Context:
-{context}
-
-Question:
-{query}
-
-Answer:
-"""
-
-    return llm(prompt)
+    return await rag_pipeline.ask(question)

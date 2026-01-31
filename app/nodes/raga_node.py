@@ -1,11 +1,12 @@
-from langgraph import Node
-from app.rag_system.rag_service import get_answer
+from app.rag_system.rag_service import get_rag_answer
+from app.workflows.state_schema import RAGAState
 
+async def rag_node(state: RAGAState) -> RAGAState:
+    result = await get_rag_answer(state["query"])
 
-class RAGANode(Node):
-    """
-    LangGraph node that wraps the RAG system
-    """
-
-    def run(self, query: str) -> str:
-        return get_answer(query)
+    return {
+        "query": state["query"],
+        "answer": result["answer"],
+        "action_result": "",
+        "sources": result.get("sources", [])
+    }
