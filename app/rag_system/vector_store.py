@@ -3,7 +3,7 @@ from typing import List, Dict
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from app.config.settings import settings
-
+from app.agent.document import Document
 
 class VectorStore:
     def __init__(self):
@@ -45,7 +45,14 @@ class VectorStore:
             self.db.save_local(settings.VECTOR_DB_PATH)
             print("Built new FAISS index and saved locally.")
 
+    # def search(self, query: str, k: int = 4):
+    #     if not self.db:
+    #         raise RuntimeError("Vector store not initialized. Call build_or_load() first.")
+    #     return self.db.similarity_search(query, k=k)
     def search(self, query: str, k: int = 4):
         if not self.db:
             raise RuntimeError("Vector store not initialized. Call build_or_load() first.")
-        return self.db.similarity_search(query, k=k)
+
+        results = self.db.similarity_search(query, k=k)
+        # Wrap results into our custom Document
+        return [Document(page_content=r.page_content, metadata=r.metadata) for r in results]
