@@ -1,11 +1,9 @@
-from langgraph import Node
-from app.actions.example_action import ExampleAction
+from app.workflows.state_schema import RAGAState
 
-
-class ActionNode(Node):
-    def __init__(self, name: str):
-        super().__init__(name)
-        self.action = ExampleAction()
-
-    def run(self, input_data: str):
-        return self.action.execute(input_data)
+def action_node(state: RAGAState) -> RAGAState:
+    result = f"Action executed on answer: {state['answer']}"
+    return {
+        "query": state["query"],
+        "answer": state["answer"],
+        "action_result": result
+    }

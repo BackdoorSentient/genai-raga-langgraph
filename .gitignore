@@ -1,0 +1,93 @@
+# ------------------------
+# Python virtual env
+# ------------------------
+venv/
+.venv/
+env/
+ENV/
+
+# ------------------------
+# Python cache / compiled
+# ------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+
+# ------------------------
+# Environment variables
+# ------------------------
+.env
+.env.*
+!.env.example
+
+# ------------------------
+# Logs
+# ------------------------
+*.log
+logs/
+log/
+
+# ------------------------
+# Test / coverage
+# ------------------------
+.coverage
+.coverage.*
+htmlcov/
+.pytest_cache/
+.tox/
+.nox/
+
+# ------------------------
+# Build / packaging
+# ------------------------
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ------------------------
+# Jupyter / notebooks
+# ------------------------
+.ipynb_checkpoints/
+
+# ------------------------
+# IDE / Editor
+# ------------------------
+.vscode/
+.idea/
+*.iml
+
+# ------------------------
+# OS files
+# ------------------------
+.DS_Store
+Thumbs.db
+
+# ------------------------
+# FastAPI / Uvicorn
+# ------------------------
+*.pid
+
+# ------------------------
+# Model / data artifacts (GenAI)
+# ------------------------
+models/
+data/
+vector_store/
+chroma/
+faiss_index/
+*.bin
+*.pkl
+
+# ------------------------
+# Docker
+# ------------------------
+*.tar
+
+# ------------------------
+# Secrets / credentials
+# ------------------------
+*.pem
+*.key
+*.crt
+secrets/

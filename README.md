@@ -116,6 +116,13 @@ source venv/bin/activate      # Windows: venv\Scripts\activate
 3. Install Dependencies
 pip install -r requirements.txt
 
+Start Ollama (required)
+ollama serve
+
+Verify:
+curl http://127.0.0.1:11434
+
+
 ## ▶️ Running the Application
 
 ```bash
@@ -123,8 +130,6 @@ uvicorn app.main:app --reload
 
 Server runs at:
 http://127.0.0.1:8000
-
-
 
 
 
