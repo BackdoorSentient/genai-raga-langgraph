@@ -4,28 +4,26 @@ from app.agent.state import AgentState
 
 # ---------------- QUERY REFINER ----------------
 def refine_query(state: AgentState, llm) -> AgentState:
-    query = state["query"]
-
     refined = llm.invoke(
-        f"Rewrite this query for better document retrieval:\n{query}"
+        f"Rewrite this query for better document retrieval:\n{state['query']}"
     )
+
+    state["steps"].append("Query refined")
 
     return {
         **state,
-        # "refined_query": refined.content
-        "refined_query": refined
+        "refined_query": refined,
+        "retry_count": state["retry_count"] + 1
     }
 
 # ---------------- RETRIEVER ----------------
 def retrieve_docs(state: AgentState, vector_store) -> AgentState:
-    query = state.get("refined_query") or state["query"]
-
+    query = state["refined_query"] or state["query"]
     docs = vector_store.search(query, k=4)
 
-    return {
-        **state,
-        "documents": docs
-    }
+    state["steps"].append(f"Retrieved {len(docs)} documents")
+
+    return {**state, "documents": docs}
 
 # ---------------- GENERATOR ----------------
 def generate_answer(state: AgentState, llm) -> AgentState:
@@ -45,6 +43,8 @@ def generate_answer(state: AgentState, llm) -> AgentState:
 
     answer = llm.invoke(prompt)
 
+    state["steps"].append("Answer generated")
+
     return {
         **state,
         # "answer": answer.content
@@ -53,29 +53,34 @@ def generate_answer(state: AgentState, llm) -> AgentState:
 
 # ---------------- VALIDATOR ----------------
 def validate_answer(state: AgentState, llm) -> AgentState:
-    validation_prompt = f"""
-    You are a strict fact checker.
+    prompt = f"""
+    Context:
+    {state['documents']}
 
-    CONTEXT:
-    {state["documents"]}
+    Answer:
+    {state['answer']}
 
-    ANSWER:
-    {state["answer"]}
+    1. Is the answer grounded in the context?
+    2. Give confidence score between 0 and 1.
 
-    Question:
-    {state["query"]}
-
-    Is the answer fully supported by the context?
-    Reply ONLY YES or NO.
+    Respond as:
+    GROUNDED: YES/NO
+    CONFIDENCE: <number>
     """
 
-    result = llm.invoke(validation_prompt)
+    result = llm.invoke(prompt)
+
     grounded = "YES" in result.upper()
 
-    retry_count = state.get("retry_count", 0) + 1
+    try:
+        confidence = float(result.split("CONFIDENCE:")[1].strip())
+    except:
+        confidence = 0.0
+
+    state["steps"].append("Answer validated")
 
     return {
         **state,
         "grounded": grounded,
-        "retry_count": retry_count
+        "confidence": confidence
     }

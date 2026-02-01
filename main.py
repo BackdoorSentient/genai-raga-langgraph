@@ -97,7 +97,9 @@ async def raga_query(query: str):
         "answer": "",
         "grounded": False,
         "retry_count": 0,
-        "max_retries": 2
+        "max_retries": 2,
+        "steps": [],
+        "confidence": 0.0
     }
 
     result = rag_agent.invoke(state)
@@ -106,7 +108,8 @@ async def raga_query(query: str):
         "query": query,
         "answer": result["answer"],
         "grounded": result["grounded"],
-        "retries_used": result["retry_count"]
+        "retries_used": result["retry_count"],
+        "agent_steps": result["steps"]
     }
 
 # Health APIs
