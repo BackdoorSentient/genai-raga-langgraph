@@ -1,10 +1,10 @@
-from typing import TypedDict, List
-# from langchain_community.document_loaders import Document
-from app.agent.document import Document
+from typing import TypedDict, List, Any
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     query: str
     refined_query: str
-    documents: List[Document]
+    documents: List[Any]
     answer: str
     grounded: bool
+    retry_count: int
+    max_retries: int

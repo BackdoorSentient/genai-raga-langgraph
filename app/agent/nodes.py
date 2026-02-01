@@ -12,7 +12,8 @@ def refine_query(state: AgentState, llm) -> AgentState:
 
     return {
         **state,
-        "refined_query": refined.content
+        # "refined_query": refined.content
+        "refined_query": refined
     }
 
 # ---------------- RETRIEVER ----------------
@@ -46,27 +47,35 @@ def generate_answer(state: AgentState, llm) -> AgentState:
 
     return {
         **state,
-        "answer": answer.content
+        # "answer": answer.content
+        "answer": answer
     }
 
 # ---------------- VALIDATOR ----------------
 def validate_answer(state: AgentState, llm) -> AgentState:
     validation_prompt = f"""
-    Context:
+    You are a strict fact checker.
+
+    CONTEXT:
     {state["documents"]}
 
-    Answer:
+    ANSWER:
     {state["answer"]}
 
-    Is the answer fully grounded in the context?
+    Question:
+    {state["query"]}
+
+    Is the answer fully supported by the context?
     Reply ONLY YES or NO.
     """
 
     result = llm.invoke(validation_prompt)
+    grounded = "YES" in result.upper()
 
-    grounded = "YES" in result.content.upper()
+    retry_count = state.get("retry_count", 0) + 1
 
     return {
         **state,
-        "grounded": grounded
+        "grounded": grounded,
+        "retry_count": retry_count
     }

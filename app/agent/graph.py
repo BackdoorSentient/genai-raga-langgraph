@@ -24,16 +24,24 @@ def build_rag_graph(llm, vector_store):
     graph.add_edge("generate", "validate")
 
     # Conditional branching
+    # def validation_router(state: AgentState):
+    #     return "end" if state["grounded"] else "refine"
+
+    # graph.add_conditional_edges(
+    #     "validate",
+    #     validation_router,
+    #     {
+    #         "refine": "refine",
+    #         "end": END
+    #     }
+    # )
+
+    # return graph.compile()
     def validation_router(state: AgentState):
-        return "end" if state["grounded"] else "refine"
-
-    graph.add_conditional_edges(
-        "validate",
-        validation_router,
-        {
-            "refine": "refine",
-            "end": END
-        }
-    )
-
-    return graph.compile()
+        if state["grounded"]:
+            return "end"
+    
+        if state["retry_count"] >= state["max_retries"]:
+            return "end"   # exit with best answer
+    
+        return "refine"

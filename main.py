@@ -2,43 +2,57 @@
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from app.utils.ollama import is_ollama_running
-from app.rag_system.ingestion import load_and_chunk_docs
 from app.rag_system.vector_store import VectorStore
-from app.rag_system.rag_pipeline import RAGPipeline
 from app.config.settings import get_settings
+from app.agent.graph import build_rag_graph
+
+# Import LangGraph RAGA
+# from app.agent.graph import StateGraph, END, CompiledGraph
+from langchain_community.llms.ollama import Ollama
+from app.agent.state import AgentState
+from typing import Any
 
 settings = get_settings()
-
 app = FastAPI(title=settings.APP_NAME)
 
+# Globals
 vector_store = VectorStore()
-rag_pipeline: RAGPipeline | None = None
+# rag_agent: "Graph" | None = None  # type: ignore
+# rag_agent= "Graph"
+rag_agent: Any = None  # type hint fixed
+
+# Initialize LLM client
+llm = Ollama(
+    model=settings.OLLAMA_MODEL,
+    base_url=settings.OLLAMA_BASE_URL
+)
 
 
-async def initialize_rag_pipeline():
+async def initialize_raga_pipeline():
     """
-    Helper to load documents, build vector store, and initialize RAG pipeline.
+    Helper to load documents, build vector store, and initialize RAGA agent.
     """
-    global rag_pipeline
+    global rag_agent
 
-    # Load PDFs and chunk
+    # Load documents
+    from app.rag_system.ingestion import load_and_chunk_docs
     documents = load_and_chunk_docs(settings.RAW_DATA_DIR)
 
-    # Build or load FAISS index
+    # Build vector store (FAISS)
     vector_store.build_or_load(documents)
 
-    # Initialize RAG pipeline
-    rag_pipeline = RAGPipeline(vector_store)
+    # Build RAGA LangGraph
+    rag_agent = build_rag_graph(llm, vector_store)
 
 
 @app.on_event("startup")
 async def startup_event():
     """
-    Startup event: load documents, build vector store, and init RAG pipeline.
+    Startup event: load documents, build vector store, and init RAGA agent.
     """
     try:
-        await initialize_rag_pipeline()
-        print("RAG pipeline initialized successfully")
+        await initialize_raga_pipeline()
+        print("✅ RAGA pipeline initialized successfully")
     except Exception as e:
         print(f"Startup failed: {e}")
 
@@ -47,13 +61,13 @@ async def startup_event():
 
 
 @app.post("/reload")
-async def reload_rag_pipeline():
+async def reload_raga_pipeline():
     """
-    Manually reload documents, rebuild vector store, and reinitialize RAG pipeline.
+    Manually reload documents, rebuild vector store, and reinitialize RAGA agent.
     """
     try:
-        await initialize_rag_pipeline()
-        return {"status": "RAG pipeline reloaded successfully"}
+        await initialize_raga_pipeline()
+        return {"status": "RAGA pipeline reloaded successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to reload: {e}")
 
@@ -66,13 +80,13 @@ def ollama_health():
     }
 
 
-@app.get("/ask")
-async def ask(question: str):
+@app.post("/raga")
+async def raga_query(query: str):
     """
-    Ask a question to the RAG pipeline
+    Ask a question to the RAGA agentic pipeline
     """
-    if not rag_pipeline:
-        raise HTTPException(503, "RAG pipeline not initialized")
+    if not rag_agent:
+        raise HTTPException(503, "RAGA pipeline not initialized")
 
     if not is_ollama_running():
         raise HTTPException(
@@ -80,14 +94,30 @@ async def ask(question: str):
             detail="Ollama is not running. Start it using `ollama serve`."
         )
 
-    return await rag_pipeline.ask(question)
+    # Initial state
+    state: AgentState = {
+        "query": query,
+        "refined_query": "",
+        "documents": [],
+        "answer": "",
+        "grounded": False
+    }
+
+    # Run agent
+    result = rag_agent.invoke(state)
+
+    return {
+        "query": query,
+        "answer": result["answer"],
+        "grounded": result["grounded"]
+    }
 
 
 @app.get("/health")
 def health():
     return {
         "status": "ok",
-        "rag_ready": rag_pipeline is not None,
+        "raga_ready": rag_agent is not None,
         "vector_store_loaded": vector_store.db is not None,
         "ollama_running": is_ollama_running()
     }
