@@ -8,3 +8,5 @@ class AgentState(TypedDict, total=False):
     grounded: bool
     retry_count: int
     max_retries: int
+    steps: List[str]
+    confidence: float

@@ -26,20 +26,25 @@ def build_rag_graph(llm, vector_store):
     #conditional router
     def validation_router(state: AgentState):
         if state["grounded"]:
-            return "end"
+            return END
 
         if state["retry_count"] >= state["max_retries"]:
-            return "end"
+            return END
 
         return "refine"
-
+    
     graph.add_conditional_edges(
         "validate",
-        validation_router,
-        {
-            "refine": "refine",
-            "end": END
-        }
+        validation_router
     )
+
+    # graph.add_conditional_edges(
+    #     "validate",
+    #     validation_router,
+    #     {
+    #         "refine": "refine",
+    #         "end": END
+    #     }
+    # )
 
     return graph.compile()
