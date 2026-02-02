@@ -1,13 +1,28 @@
-from typing import TypedDict, List, Any
+from typing import List, Optional, TypedDict, Any
 
-class AgentState(TypedDict, total=False):
+
+class AgentState(TypedDict):
+    # Input
     query: str
-    refined_query: str
+
+    # Query refinement
+    refined_query: Optional[str]
+
+    # Retrieval
     documents: List[Any]
-    answer: str
+    citations: List[str]
+
+    # Generation
+    answer: Optional[str]
+
+    # Validation
     grounded: bool
+    confidence: float
+    insufficient_context: bool
+
+    # Control flow
     retry_count: int
     max_retries: int
+
+    # Debug / tracing
     steps: List[str]
-    confidence: float
-    citations: List[str]

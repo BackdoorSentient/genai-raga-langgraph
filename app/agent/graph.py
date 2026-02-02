@@ -7,6 +7,7 @@ from app.agent.nodes import (
     validate_answer
 )
 
+
 def build_rag_graph(llm, vector_store):
 
     graph = StateGraph(AgentState)
@@ -23,28 +24,22 @@ def build_rag_graph(llm, vector_store):
     graph.add_edge("retrieve", "generate")
     graph.add_edge("generate", "validate")
 
-    #conditional router
+    # Conditional routing after validation
     def validation_router(state: AgentState):
         if state["grounded"]:
+            return END
+
+        if state["insufficient_context"]:
             return END
 
         if state["retry_count"] >= state["max_retries"]:
             return END
 
         return "refine"
-    
+
     graph.add_conditional_edges(
         "validate",
         validation_router
     )
-
-    # graph.add_conditional_edges(
-    #     "validate",
-    #     validation_router,
-    #     {
-    #         "refine": "refine",
-    #         "end": END
-    #     }
-    # )
 
     return graph.compile()
