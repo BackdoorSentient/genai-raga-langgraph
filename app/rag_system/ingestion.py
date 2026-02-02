@@ -21,9 +21,8 @@ def load_and_chunk_docs(data_dir: str) -> List[Dict]:
         for chunk in chunks:
             documents.append({
                 "text": chunk.page_content,
-                "source": pdf.name,
                 "metadata": {
-                    # "source": pdf.name,
+                    "source": pdf.name,
                     "page": chunk.metadata.get("page", None)
                 }
             })
