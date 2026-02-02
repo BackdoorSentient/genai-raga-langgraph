@@ -5,10 +5,7 @@ from langchain_community.document_loaders import PyPDFLoader
 
 def load_and_chunk_docs(data_dir: str) -> List[Dict]:
     documents = []
-    pdf_files = list(Path(data_dir).glob("*.pdf"))
-
-    if not pdf_files:
-        raise ValueError(f"No PDF files found in {data_dir}")
+    pdf_files = Path(data_dir).glob("*.pdf")
 
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -17,13 +14,21 @@ def load_and_chunk_docs(data_dir: str) -> List[Dict]:
 
     for pdf in pdf_files:
         loader = PyPDFLoader(str(pdf))
-        pages = loader.load()  # returns List[Document]
-        chunks = splitter.split_documents(pages)  # List[Document]
+        pages = loader.load()
+
+        chunks = splitter.split_documents(pages)
 
         for chunk in chunks:
             documents.append({
                 "text": chunk.page_content,
-                "metadata": chunk.metadata
+                "source": pdf.name,
+                "metadata": {
+                    # "source": pdf.name,
+                    "page": chunk.metadata.get("page", None)
+                }
             })
+
+    if not documents:
+        raise ValueError(f"No PDFs found or PDFs are empty in {data_dir}")
 
     return documents
