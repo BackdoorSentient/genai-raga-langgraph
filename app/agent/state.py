@@ -10,3 +10,4 @@ class AgentState(TypedDict, total=False):
     max_retries: int
     steps: List[str]
     confidence: float
+    citations: List[str]

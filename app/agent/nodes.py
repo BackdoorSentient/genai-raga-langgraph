@@ -12,27 +12,33 @@ def refine_query(state: AgentState, llm) -> AgentState:
 
     return {
         **state,
-        "refined_query": refined,
-        "retry_count": state["retry_count"] + 1
+        "refined_query": refined
     }
 
 # ---------------- RETRIEVER ----------------
 def retrieve_docs(state: AgentState, vector_store) -> AgentState:
     query = state["refined_query"] or state["query"]
     docs = vector_store.search(query, k=4)
+    sources = [doc.source for doc in docs]
 
     state["steps"].append(f"Retrieved {len(docs)} documents")
 
-    return {**state, "documents": docs}
+    return {**state, "documents": docs, "citations":sources}
 
 # ---------------- GENERATOR ----------------
 def generate_answer(state: AgentState, llm) -> AgentState:
-    context = "\n\n".join(
-        doc.page_content for doc in state["documents"]
-    )
+    if not state["documents"]:
+        return {
+            **state,
+            "answer": "I could not find relevant information in the documents.",
+            "citations": []
+        }
+
+    context = "\n\n".join(doc.page_content for doc in state["documents"])
 
     prompt = f"""
-    Use ONLY the context below to answer.
+    Answer the question using ONLY the context.
+    If unsure, say you are unsure.
 
     Context:
     {context}
@@ -47,40 +53,50 @@ def generate_answer(state: AgentState, llm) -> AgentState:
 
     return {
         **state,
-        # "answer": answer.content
-        "answer": answer
+        "answer": answer,
+        "citations": [f"doc_{i}" for i in range(len(state["citations"]))]
     }
+
 
 # ---------------- VALIDATOR ----------------
 def validate_answer(state: AgentState, llm) -> AgentState:
+    context = "\n\n".join(
+        doc.page_content for doc in state["documents"]
+    )
+
     prompt = f"""
     Context:
-    {state['documents']}
+    {context}
 
     Answer:
     {state['answer']}
 
-    1. Is the answer grounded in the context?
-    2. Give confidence score between 0 and 1.
-
-    Respond as:
-    GROUNDED: YES/NO
-    CONFIDENCE: <number>
+    Is the answer strictly grounded in the context?
+    Reply ONLY with:
+    GROUNDED: YES or NO
+    CONFIDENCE: <0 to 1>
     """
 
     result = llm.invoke(prompt)
 
-    grounded = "YES" in result.upper()
+    grounded = "GROUNDED: YES" in result.upper()
 
     try:
-        confidence = float(result.split("CONFIDENCE:")[1].strip())
+        confidence = float(
+            result.upper().split("CONFIDENCE:")[1].strip()
+        )
     except:
         confidence = 0.0
+
+    #increment retry only if not grounded
+    retry_count = state["retry_count"] + (0 if grounded else 1)
 
     state["steps"].append("Answer validated")
 
     return {
         **state,
         "grounded": grounded,
-        "confidence": confidence
+        "confidence": confidence,
+        "retry_count": retry_count,
+        "citations":state['citations']
     }
