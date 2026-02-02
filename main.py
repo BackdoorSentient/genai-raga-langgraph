@@ -14,14 +14,16 @@ from app.agent.state import AgentState
 
 from app.rag_system.rag_pipeline import RAGPipeline
 
+from app.agent.agentic_raga_graph import build_agentic_raga_graph
+
 settings = get_settings()
 app = FastAPI(title=settings.APP_NAME)
 
 vector_store = VectorStore()
-rag_agent: Any = None
 
 rag_pipeline: RAGPipeline | None = None
 rag_agent: Any = None
+agentic_raga_agent: Any = None
 
 llm = Ollama(
     model=settings.OLLAMA_MODEL,
@@ -30,19 +32,16 @@ llm = Ollama(
 
 # Initialization helper
 async def initialize_pipelines():
-    global rag_pipeline, rag_agent
+    global rag_pipeline, rag_agent, agentic_raga_agent
 
-    # Load & chunk documents
     documents = load_and_chunk_docs(settings.RAW_DATA_DIR)
-
-    # Build vector store
     vector_store.build_or_load(documents)
 
-    # Initialize classic RAG
     rag_pipeline = RAGPipeline(vector_store)
 
-    # Initialize agentic RAG (LangGraph)
     rag_agent = build_rag_graph(llm, vector_store)
+
+    agentic_raga_agent = build_agentic_raga_graph(llm, vector_store)
 
 # Startup
 @app.on_event("startup")
@@ -113,6 +112,40 @@ async def raga_query(query: str):
         "agent_steps": result["steps"],
         "confidence_score":result["confidence"],
         "citations":result["citations"]
+    }
+
+@app.post("/agentic-raga")
+async def agentic_raga_query(query: str):
+    if not agentic_raga_agent:
+        raise HTTPException(503, "Agentic RAGA not initialized")
+
+    if not is_ollama_running():
+        raise HTTPException(503, "Ollama not running")
+
+    state: AgentState = {
+        "query": query,
+        "goal": "Answer the query using grounded documents",
+        "plan": [],
+        "current_step": 0,
+        "observations": [],
+        "critic_decision": "",
+        "documents": [],
+        "answer": "",
+        "retry_count": 0,
+        "max_retries": 3,
+        "confidence": 0.0,
+        "citations": []
+    }
+
+    result = agentic_raga_agent.invoke(state)
+
+    return {
+        "query": query,
+        "answer": result["answer"],
+        "plan": result["plan"],
+        "critic_decision": result["critic_decision"],
+        "confidence": result["confidence"],
+        "citations": result["citations"]
     }
 
 # Health APIs

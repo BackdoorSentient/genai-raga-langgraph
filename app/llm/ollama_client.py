@@ -24,3 +24,5 @@ class OllamaClient(BaseLLM):
 
             data = res.json()
             return (data.get("response") or "").strip()
+
+ollama_llm = OllamaClient(model="llama3")
