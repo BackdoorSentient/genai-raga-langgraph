@@ -1,5 +1,6 @@
 from app.agent.state import AgentState
 from typing import Any, List
+from app.llm.ollama_client import ollama_llm
 
 
 SYSTEM_PROMPT = """
@@ -26,10 +27,13 @@ def summarize_node(state: AgentState, llm: Any) -> AgentState:
 
     for i, doc in enumerate(documents):
         context_chunks.append(doc.page_content)
-        if "source" in doc.metadata:
-            citations.append(doc.metadata["source"])
-        else:
-            citations.append(f"doc_{i}")
+        # if "source" in doc.metadata:
+        #     citations.append(doc.metadata["source"])
+        # else:
+        #     citations.append(f"doc_{i}")
+        citations.append(
+            doc.metadata.get("source", f"doc_{i}")
+        )
 
     context = "\n\n".join(context_chunks)
 
@@ -45,9 +49,10 @@ Documents:
 Answer:
 """
 
-    response = llm.invoke(prompt)
+    # response = llm.invoke(prompt)
 
-    answer = response.strip()
+    # answer = response.strip()
+    answer = ollama_llm.generate(prompt)
 
     # Simple grounding heuristic
     grounded = "I don't know" not in answer.lower()

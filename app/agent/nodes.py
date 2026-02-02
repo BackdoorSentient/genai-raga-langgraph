@@ -86,6 +86,9 @@ def validate_answer(state: AgentState, llm) -> AgentState:
     except:
         confidence = 0.0
 
+    if not grounded:
+        confidence = 0.0
+
     #increment retry only if not grounded
     retry_count = state["retry_count"] + (0 if grounded else 1)
 

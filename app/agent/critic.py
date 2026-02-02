@@ -27,7 +27,7 @@ Reply ONLY in valid JSON:
 """
 
 
-async def critic_node(state: dict) -> dict:
+def critic_node(state: dict) -> dict:
     """
     Input state:
     {
