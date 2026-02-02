@@ -1,5 +1,3 @@
-# from langchain.schema import Document
-# from app.agent.document import Document
 from app.agent.state import AgentState
 
 # ---------------- QUERY REFINER ----------------
@@ -54,7 +52,7 @@ def generate_answer(state: AgentState, llm) -> AgentState:
     return {
         **state,
         "answer": answer,
-        "citations": [f"doc_{i}" for i in range(len(state["citations"]))]
+        "citations": state["citations"]
     }
 
 

@@ -38,13 +38,4 @@ def build_rag_graph(llm, vector_store):
         validation_router
     )
 
-    # graph.add_conditional_edges(
-    #     "validate",
-    #     validation_router,
-    #     {
-    #         "refine": "refine",
-    #         "end": END
-    #     }
-    # )
-
     return graph.compile()
