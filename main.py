@@ -66,7 +66,7 @@ async def reload_pipelines():
         raise HTTPException(500, str(e))
     
 @app.post("/rag")
-async def rag_query(question: str):
+def rag_query(question: str):
     if not rag_pipeline:
         raise HTTPException(503, "RAG pipeline not initialized")
 
@@ -76,7 +76,7 @@ async def rag_query(question: str):
             detail="Ollama is not running"
         )
 
-    return await rag_pipeline.ask(question)
+    return rag_pipeline.ask(question)
 
 # RAGA Query API
 @app.post("/raga")

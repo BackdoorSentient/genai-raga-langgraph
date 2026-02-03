@@ -14,7 +14,7 @@ class RAGPipeline:
         self.vector_store = vector_store
         self.llm = get_llm()
 
-    async def ask(self, question: str) -> Dict[str, Any]:
+    def ask(self, question: str) -> Dict[str, Any]:
         # Retrieve relevant documents
         docs = self.vector_store.search(question)
 
@@ -42,7 +42,7 @@ Question:
 """.strip()
 
         # LLM call
-        answer = await self.llm.generate(prompt)
+        answer = self.llm.generate(prompt)
 
         return {
             "answer": answer,
