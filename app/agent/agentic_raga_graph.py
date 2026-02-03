@@ -15,6 +15,8 @@ from app.agent.critic import critic_node
 # Shared state schema
 from app.workflows.state_schema import RAGAState
 
+from app.agent.state import AgentState
+
 
 def build_agentic_raga_graph():
     """
@@ -30,7 +32,7 @@ def build_agentic_raga_graph():
       → Retry (Planner) OR End
     """
 
-    graph = StateGraph(RAGAState)
+    graph = StateGraph(AgentState)
 
     # ------------------
     # Register nodes

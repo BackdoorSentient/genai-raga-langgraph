@@ -1,83 +1,90 @@
-# app/agent/planner.py
-
 import json
-from typing import List, Literal
-from pydantic import BaseModel
+from typing import Dict, Any, List
 from app.llm.ollama_client import ollama_llm
-import re
 
-class PlanStep(BaseModel):
-    step: int
-    tool: Literal["rag", "tool", "llm"]
-    action: str
+# --------------------------------------------------
+# Use a planner-specific model WITHOUT breaking global usage
+# --------------------------------------------------
+planner_llm = ollama_llm.with_model("qwen2.5:7b-instruct")
 
-class Plan(BaseModel):
-    steps: List[PlanStep]
-
+# --------------------------------------------------
+# Planner prompt (escaped for .format)
+# --------------------------------------------------
 PLANNER_PROMPT = """
-You are a planning agent for an Agentic RAG system.
-
-Available tools:
-- rag : internal document retrieval system
-- tool : external tools or web search
-- llm : reasoning, summarization, final answer
-
-Rules:
-- Prefer using rag first if the answer may exist internally
-- Use tool only if external info is needed
-- Always end with llm
-- Keep steps minimal and logical
-- Output ONLY valid JSON, NOTHING ELSE
-- Do NOT add greetings, explanations, or extra text. Only JSON.
+You are a planning agent in an Agentic AI system.
 
 User goal:
-{goal}
+"{goal}"
 
-Output JSON format:
+Break this goal into a list of clear, ordered steps.
+
+Rules:
+- Return ONLY valid JSON
+- No explanations
+- No markdown
+- Output MUST strictly follow this format:
+
 {{
   "steps": [
-    {{
-      "step": 1,
-      "tool": "rag|tool|llm",
-      "action": "description of what to do"
-    }}
+    "step 1",
+    "step 2",
+    "step 3"
   ]
 }}
 """
 
-def planner_node(state: dict) -> dict:
+
+def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
+    Planner Node
+
     Input state:
     {
         "goal": str
     }
+
+    Output state additions:
+    {
+        "plan": list[str],
+        "current_step": int,
+        "observations": list
+    }
     """
 
     goal = state.get("goal")
-    if not goal:
-        raise ValueError("PlannerNode: 'goal' missing from state")
 
-    response = ollama_llm.generate(
+    if not isinstance(goal, str) or not goal.strip():
+        raise ValueError("PlannerNode: 'goal' must be a non-empty string")
+
+    response = planner_llm.generate(
         PLANNER_PROMPT.format(goal=goal)
     )
-    # if not response or "{" not in response:
-    #     raise ValueError(f"LLM did not return any JSON-like content:\n{response}")
-    # match = re.search(r"\{.*\}", response, re.DOTALL)
-    match = re.search(r"\{(?:.|\n)*\}", response)
-    if not match:
-        raise ValueError(f"LLM did not return valid JSON:\n{response}")
 
-
+    # ----------------------------
+    # Parse LLM output safely
+    # ----------------------------
     try:
-        # plan_json = json.loads(response)
-        plan_json = json.loads(match.group())
-        plan = Plan.model_validate(plan_json)
-    except json.JSONDecodeError:
-        raise ValueError(f"LLM did not return valid JSON:\n{response}")
+        plan_json = json.loads(response)
+        steps = plan_json.get("steps", [])
 
+        if not isinstance(steps, list):
+            raise ValueError("Invalid steps format")
+
+    except Exception:
+        # Hard fallback to keep agent alive
+        steps = [f"Answer the user goal directly: {goal}"]
+
+    # ----------------------------
+    # Return updated state
+    # ----------------------------
     return {
         **state,
-        "plan": plan.steps,
+        "plan": steps,
         "current_step": 0,
-        "observations": []
+        "observations": [
+            {
+                "node": "planner",
+                "raw_output": response[:300]
+            }
+        ]
     }
