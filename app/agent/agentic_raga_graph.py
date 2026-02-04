@@ -12,8 +12,7 @@ from app.nodes.summarize_node import summarize_node
 from app.agent.planner import planner_node
 from app.agent.critic import critic_node
 
-# Shared state schema
-from app.workflows.state_schema import RAGAState
+from app.agent.state import AgentState
 
 
 def build_agentic_raga_graph():
@@ -30,7 +29,7 @@ def build_agentic_raga_graph():
       → Retry (Planner) OR End
     """
 
-    graph = StateGraph(RAGAState)
+    graph = StateGraph(AgentState)
 
     # ------------------
     # Register nodes
@@ -63,10 +62,11 @@ def build_agentic_raga_graph():
 
     graph.add_conditional_edges(
         "decision",
-        lambda state: state["next_node"],  # already implemented by you
+        lambda state: state["next_node"],
         {
             "rag": "rag",
-            "tool": "tool"
+            "tool": "tool",
+            "summarize": "summarize"
         }
     )
 

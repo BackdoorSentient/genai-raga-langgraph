@@ -1,26 +1,13 @@
-from app.rag_system.rag_service import get_rag_answer
-from app.workflows.state_schema import RAGAState
-import asyncio
+# app/nodes/raga_node.py
+from app.agent.state import AgentState
 
-def rag_node(state: RAGAState) -> RAGAState:
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        result = loop.run_until_complete(
-            get_rag_answer(state["query"])
-        )
-    else:
-        result = asyncio.run(
-            get_rag_answer(state["query"])
-        )
-
-    return {
-        **state,   
-        "query": state["query"],
-        "answer": result["answer"],
-        "action_result": "",
-        "sources": result.get("sources", [])
-    }
+def rag_node(state: AgentState) -> AgentState:
+    """
+    RAG node in agentic flow.
+    Retrieval is handled by tool_node.
+    This node only advances the graph.
+    """
+    state.setdefault("steps", []).append(
+        "RAGNode → Skipped (Agentic flow)"
+    )
+    return state

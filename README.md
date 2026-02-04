@@ -234,7 +234,7 @@ genai-raga-langgraph/
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/<your-username>/genai-raga-langgraph.git
+git clone https://github.com/BackdoorSentient/genai-raga-langgraph.git
 cd genai-raga-langgraph
 ```
 
@@ -270,7 +270,15 @@ curl http://127.0.0.1:11434
 Ensure the required model is pulled:
 
 ```bash
+#RAG and RAGA
 ollama pull llama3
+# Planner
+ollama pull qwen2.5:7b-instruct
+# Executor / Answer generation
+ollama pull qwen2.5:14b-instruct
+# Validator / reasoning
+ollama pull qwen2.5:3b-instruct
+
 ```
 
 ---
