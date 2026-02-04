@@ -234,7 +234,7 @@ genai-raga-langgraph/
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/<your-username>/genai-raga-langgraph.git
+git clone https://github.com/BackdoorSentient/genai-raga-langgraph.git
 cd genai-raga-langgraph
 ```
 

@@ -12,9 +12,6 @@ from app.nodes.summarize_node import summarize_node
 from app.agent.planner import planner_node
 from app.agent.critic import critic_node
 
-# Shared state schema
-from app.workflows.state_schema import RAGAState
-
 from app.agent.state import AgentState
 
 
