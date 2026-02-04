@@ -4,6 +4,7 @@ from typing import TypedDict, List, Any, Optional
 class RAGAState(TypedDict, total=False):
     # ---- Core ----
     query: str
+    refined_query: str
     documents: List[Any]
     answer: str
 
@@ -18,9 +19,13 @@ class RAGAState(TypedDict, total=False):
     retry_reason: Optional[str]
     terminate: bool
 
-    # ---- Time ----
+    # ---- Timing ----
     start_time: float
     timeout_seconds: int
 
-    # ---- Tracing ----
+    # ---- Observability ----
     steps: List[str]
+    timeline: List[dict]
+
+    # ---- Quality ----
+    quality_score: float

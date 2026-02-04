@@ -92,72 +92,30 @@ def rag_query(question: str):
     return rag_pipeline.ask(question)
 
 # RAGA Query API
-# @app.post("/raga")
-# async def raga_query(query: str):
-#     if not rag_agent:
-#         raise HTTPException(503, "RAGA pipeline not initialized")
-
-#     if not is_ollama_running():
-#         raise HTTPException(
-#             status_code=503,
-#             detail="Ollama is not running. Start it using `ollama serve`."
-#         )
-
-#     state: AgentState = {
-#         "query": query,
-#         "refined_query": "",
-#         "documents": [],
-#         "answer": "",
-#         "grounded": False,
-#         "retry_count": 0,
-#         "max_retries": 2,
-#         "steps": [],
-#         "confidence": 0.0,
-#         "citations":[]
-#     }
-
-#     result = rag_agent.invoke(state)
-
-#     return {
-#         "query": query,
-#         "answer": result["answer"],
-#         "grounded": result["grounded"],
-#         "retries_used": result["retry_count"],
-#         "agent_steps": result["steps"],
-#         "confidence_score":result["confidence"],
-#         "citations":result["citations"]
-#     }
 @app.post("/raga")
 async def raga_query(query: str):
     if not raga_agent:
         raise HTTPException(503, "RAGA not initialized")
 
-    state = {
+    state: RAGAState = {
         "query": query,
         "documents": [],
-        "answer": "",
-        "grounded": False,
-        "confidence": 0.0,
         "citations": [],
         "steps": [],
+        "timeline": [],
 
-        # ---- retry ----
         "retry_count": 0,
         "max_retries": 2,
 
-        # ---- timing (CRITICAL) ----
         "start_time": time.time(),
         "timeout_seconds": 20,
 
-        # ---- critic ----
         "terminate": False,
-        "retry_reason": None,
     }
 
-    result = raga_agent.invoke(
-        state,
-        config={"recursion_limit": 20}
-    )
+    t0 = time.time()
+    result = raga_agent.invoke(state, config={"recursion_limit": 20})
+    result["total_latency_ms"] = round((time.time() - t0) * 1000, 2)
 
     return result
 

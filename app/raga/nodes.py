@@ -1,59 +1,83 @@
 import time
+from app.raga.state import RAGAState
 
 
-def refine_query(state, llm):
+# -------- QUERY REFINER --------
+def refine_query(state: RAGAState, llm) -> RAGAState:
+    t0 = time.time()
+
     refined = llm.invoke(
         f"Rewrite this query for better document retrieval:\n{state['query']}"
     )
 
-    state["steps"].append("Query refined")
-    return {**state, "refined_query": refined}
+    latency = round((time.time() - t0) * 1000, 2)
+
+    state.setdefault("steps", []).append("Query refined")
+    state.setdefault("timeline", []).append({
+        "node": "refine",
+        "latency_ms": latency
+    })
+
+    state["refined_query"] = refined
+    return state
 
 
-def retrieve_docs(state, vector_store):
+# -------- RETRIEVER --------
+def retrieve_docs(state: RAGAState, vector_store) -> RAGAState:
+    t0 = time.time()
+
     query = state.get("refined_query") or state["query"]
     docs = vector_store.search(query, k=4)
-    sources = [doc.source for doc in docs]
 
-    state["steps"].append(f"Retrieved {len(docs)} documents")
+    latency = round((time.time() - t0) * 1000, 2)
 
-    return {
-        **state,
-        "documents": docs,
-        "citations": sources
-    }
+    state.setdefault("steps", []).append(f"Retrieved {len(docs)} documents")
+    state.setdefault("timeline", []).append({
+        "node": "retrieve",
+        "latency_ms": latency
+    })
+
+    state["documents"] = docs
+    state["citations"] = [doc.source for doc in docs]
+    return state
 
 
-def generate_answer(state, llm):
-    if not state["documents"]:
-        state["steps"].append("No documents found")
-        return {
-            **state,
-            "answer": "I could not find relevant information.",
-            "citations": []
-        }
+# -------- GENERATOR --------
+def generate_answer(state: RAGAState, llm) -> RAGAState:
+    t0 = time.time()
 
-    context = "\n\n".join(d.page_content for d in state["documents"])
+    context = "\n\n".join(doc.page_content for doc in state["documents"])
 
     prompt = f"""
-    Answer ONLY using the context below.
+    Answer using ONLY the context.
     If unsure, say you are unsure.
 
     Context:
     {context}
 
     Question:
-    {state["query"]}
+    {state['query']}
     """
 
     answer = llm.invoke(prompt)
-    state["steps"].append("Answer generated")
 
-    return {**state, "answer": answer}
+    latency = round((time.time() - t0) * 1000, 2)
+
+    state.setdefault("steps", []).append("Answer generated")
+    state.setdefault("timeline", []).append({
+        "node": "generate",
+        "latency_ms": latency
+    })
+
+    state["answer"] = answer
+    return state
 
 
-def validate_answer(state, llm):
-    context = "\n\n".join(d.page_content for d in state["documents"])
+# -------- VALIDATOR --------
+def validate_answer(state: RAGAState, llm) -> RAGAState:
+    t0 = time.time()
+
+    context = "\n\n".join(doc.page_content for doc in state["documents"])
 
     prompt = f"""
     Context:
@@ -70,17 +94,22 @@ def validate_answer(state, llm):
 
     result = llm.invoke(prompt)
 
-    grounded = "YES" in result.upper()
-
+    grounded = "GROUNDED: YES" in result.upper()
     try:
-        confidence = float(result.split("CONFIDENCE:")[1].strip())
+        confidence = float(result.upper().split("CONFIDENCE:")[1].strip())
     except:
         confidence = 0.0
 
-    state["steps"].append("Answer validated")
+    latency = round((time.time() - t0) * 1000, 2)
 
-    return {
-        **state,
-        "grounded": grounded,
-        "confidence": confidence if grounded else 0.0
-    }
+    state.setdefault("steps", []).append("Answer validated")
+    state.setdefault("timeline", []).append({
+        "node": "validate",
+        "latency_ms": latency
+    })
+
+    state["grounded"] = grounded
+    state["confidence"] = confidence if grounded else 0.0
+    state["retry_count"] = state.get("retry_count", 0) + (0 if grounded else 1)
+
+    return state

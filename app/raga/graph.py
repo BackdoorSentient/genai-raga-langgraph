@@ -25,17 +25,13 @@ def build_raga_graph(llm, vector_store):
     graph.add_edge("generate", "validate")
     graph.add_edge("validate", "critic")
 
-    # ✅ Router must return STRING, not dict
-    def route(state: RAGAState):
-        return END if state.get("terminate") else "refine"
-
     graph.add_conditional_edges(
         "critic",
-        route,
+        lambda s: END if s["terminate"] else "refine",
         {
             "refine": "refine",
-            END: END,
-        },
+            END: END
+        }
     )
 
     return graph.compile()
