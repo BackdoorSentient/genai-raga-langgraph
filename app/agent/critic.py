@@ -20,10 +20,10 @@ Decide:
 - "retry" → missing info, weak reasoning, or hallucination
 
 Reply ONLY in valid JSON:
-{
+{{
   "decision": "accept" | "retry",
   "reason": "short explanation"
-}
+}}
 """
 
 

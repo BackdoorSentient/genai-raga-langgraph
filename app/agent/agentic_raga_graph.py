@@ -65,10 +65,11 @@ def build_agentic_raga_graph():
 
     graph.add_conditional_edges(
         "decision",
-        lambda state: state["next_node"],  # already implemented by you
+        lambda state: state["next_node"],
         {
             "rag": "rag",
-            "tool": "tool"
+            "tool": "tool",
+            "summarize": "summarize"
         }
     )
 

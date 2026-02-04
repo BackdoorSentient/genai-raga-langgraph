@@ -11,7 +11,7 @@ Cite sources explicitly.
 """
 
 
-def summarize_node(state: AgentState, llm: Any) -> AgentState:
+def summarize_node(state: AgentState) -> AgentState:
     documents = state.get("documents", [])
     query = state.get("query", "")
 
