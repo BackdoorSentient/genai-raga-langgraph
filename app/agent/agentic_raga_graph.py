@@ -4,7 +4,7 @@ from langgraph.graph import StateGraph, END
 
 # Existing RAGA nodes (UNCHANGED)
 from app.nodes.decision_node import decision_node
-from app.nodes.raga_node import rag_node
+from app.nodes.rag_node import rag_node
 from app.nodes.tool_node import tool_node
 from app.nodes.summarize_node import summarize_node
 
