@@ -2,25 +2,25 @@ from typing import TypedDict, List, Any, Optional
 
 
 class RAGAState(TypedDict, total=False):
-    # Core
+    # ---- Core ----
     query: str
-    refined_query: str
-
-    # RAG
     documents: List[Any]
     answer: str
-    citations: List[str]
 
-    # Validation
+    # ---- Validation ----
     grounded: bool
     confidence: float
-    retry_reason: Optional[str]
+    citations: List[str]
 
-    # Retry
+    # ---- Retry / Control ----
     retry_count: int
     max_retries: int
+    retry_reason: Optional[str]
+    terminate: bool
 
-    # Observability
-    steps: List[str]
+    # ---- Time ----
     start_time: float
-    timeout_seconds: float
+    timeout_seconds: int
+
+    # ---- Tracing ----
+    steps: List[str]

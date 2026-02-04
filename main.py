@@ -3,6 +3,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from typing import Any
 
+import time
+
 from langchain_community.llms.ollama import Ollama
 
 from app.utils.ollama import is_ollama_running
@@ -128,32 +130,36 @@ def rag_query(question: str):
 @app.post("/raga")
 async def raga_query(query: str):
     if not raga_agent:
-        raise HTTPException(503, "RAGA pipeline not initialized")
+        raise HTTPException(503, "RAGA not initialized")
 
-    if not is_ollama_running():
-        raise HTTPException(
-            status_code=503,
-            detail="Ollama is not running. Start it using `ollama serve`."
-        )
-
-    state: RAGAState = {
+    state = {
         "query": query,
+        "documents": [],
+        "answer": "",
+        "grounded": False,
+        "confidence": 0.0,
+        "citations": [],
+        "steps": [],
+
+        # ---- retry ----
         "retry_count": 0,
         "max_retries": 2,
-        "steps": []
+
+        # ---- timing (CRITICAL) ----
+        "start_time": time.time(),
+        "timeout_seconds": 20,
+
+        # ---- critic ----
+        "terminate": False,
+        "retry_reason": None,
     }
 
-    result = raga_agent.invoke(state)
+    result = raga_agent.invoke(
+        state,
+        config={"recursion_limit": 20}
+    )
 
-    return {
-        "query": query,
-        "answer": result.get("answer"),
-        "grounded": result.get("grounded"),
-        "retries_used": result.get("retry_count"),
-        "raga_steps": result.get("steps"),
-        "confidence_score": result.get("confidence"),
-        "citations": result.get("citations"),
-    }
+    return result
 
 @app.post("/agentic-raga")
 async def agentic_raga_query(query: str):
