@@ -10,11 +10,17 @@ from app.rag_system.vector_store import VectorStore
 from app.rag_system.ingestion import load_and_chunk_docs
 from app.config.settings import get_settings
 from app.agent.graph import build_rag_graph
-from app.agent.state import AgentState
+
 
 from app.rag_system.rag_pipeline import RAGPipeline
 
+# --- RAGA (non-agentic) ---
+from app.raga.graph import build_raga_graph
+from app.raga.state import RAGAState
+
+# --- Agentic RAGA ---
 from app.agent.agentic_raga_graph import build_agentic_raga_graph
+from app.agent.state import AgentState
 
 settings = get_settings()
 app = FastAPI(title=settings.APP_NAME)
@@ -23,6 +29,7 @@ vector_store = VectorStore()
 
 rag_pipeline: RAGPipeline | None = None
 rag_agent: Any = None
+raga_agent: Any = None
 agentic_raga_agent: Any = None
 
 llm = Ollama(
@@ -32,7 +39,7 @@ llm = Ollama(
 
 # Initialization helper
 async def initialize_pipelines():
-    global rag_pipeline, rag_agent, agentic_raga_agent
+    global rag_pipeline, rag_agent, raga_agent, agentic_raga_agent
 
     documents = load_and_chunk_docs(settings.RAW_DATA_DIR)
     vector_store.build_or_load(documents)
@@ -40,6 +47,10 @@ async def initialize_pipelines():
     rag_pipeline = RAGPipeline(vector_store)
 
     rag_agent = build_rag_graph(llm, vector_store)
+
+    # RAGA-only graph (new, simple retry/grounding loop)
+    raga_agent = build_raga_graph(llm, vector_store)
+
 
     # agentic_raga_agent = build_agentic_raga_graph(llm, vector_store)
     agentic_raga_agent = build_agentic_raga_graph()
@@ -79,9 +90,44 @@ def rag_query(question: str):
     return rag_pipeline.ask(question)
 
 # RAGA Query API
+# @app.post("/raga")
+# async def raga_query(query: str):
+#     if not rag_agent:
+#         raise HTTPException(503, "RAGA pipeline not initialized")
+
+#     if not is_ollama_running():
+#         raise HTTPException(
+#             status_code=503,
+#             detail="Ollama is not running. Start it using `ollama serve`."
+#         )
+
+#     state: AgentState = {
+#         "query": query,
+#         "refined_query": "",
+#         "documents": [],
+#         "answer": "",
+#         "grounded": False,
+#         "retry_count": 0,
+#         "max_retries": 2,
+#         "steps": [],
+#         "confidence": 0.0,
+#         "citations":[]
+#     }
+
+#     result = rag_agent.invoke(state)
+
+#     return {
+#         "query": query,
+#         "answer": result["answer"],
+#         "grounded": result["grounded"],
+#         "retries_used": result["retry_count"],
+#         "agent_steps": result["steps"],
+#         "confidence_score":result["confidence"],
+#         "citations":result["citations"]
+#     }
 @app.post("/raga")
 async def raga_query(query: str):
-    if not rag_agent:
+    if not raga_agent:
         raise HTTPException(503, "RAGA pipeline not initialized")
 
     if not is_ollama_running():
@@ -90,29 +136,23 @@ async def raga_query(query: str):
             detail="Ollama is not running. Start it using `ollama serve`."
         )
 
-    state: AgentState = {
+    state: RAGAState = {
         "query": query,
-        "refined_query": "",
-        "documents": [],
-        "answer": "",
-        "grounded": False,
         "retry_count": 0,
         "max_retries": 2,
-        "steps": [],
-        "confidence": 0.0,
-        "citations":[]
+        "steps": []
     }
 
-    result = rag_agent.invoke(state)
+    result = raga_agent.invoke(state)
 
     return {
         "query": query,
-        "answer": result["answer"],
-        "grounded": result["grounded"],
-        "retries_used": result["retry_count"],
-        "agent_steps": result["steps"],
-        "confidence_score":result["confidence"],
-        "citations":result["citations"]
+        "answer": result.get("answer"),
+        "grounded": result.get("grounded"),
+        "retries_used": result.get("retry_count"),
+        "raga_steps": result.get("steps"),
+        "confidence_score": result.get("confidence"),
+        "citations": result.get("citations"),
     }
 
 @app.post("/agentic-raga")
