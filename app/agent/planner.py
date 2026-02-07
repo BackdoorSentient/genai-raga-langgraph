@@ -1,90 +1,85 @@
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any
 from app.llm.ollama_client import ollama_llm
 
-# --------------------------------------------------
-# Use a planner-specific model WITHOUT breaking global usage
-# --------------------------------------------------
 planner_llm = ollama_llm.with_model("qwen2.5:7b-instruct")
 
-# --------------------------------------------------
-# Planner prompt (escaped for .format)
-# --------------------------------------------------
+
 PLANNER_PROMPT = """
-You are a planning agent in an Agentic AI system.
+You are a planning agent.
+
+Your task:
+Break the user goal into clear, ordered steps.
 
 User goal:
-"{goal}"
+{goal}
 
-Break this goal into a list of clear, ordered steps.
+STRICT OUTPUT RULES:
+- Output MUST be valid JSON
+- Output MUST start with '{{' and end with '}}'
+- NO markdown
+- NO explanations
+- NO extra text
 
-Rules:
-- Return ONLY valid JSON
-- No explanations
-- No markdown
-- Output MUST strictly follow this format:
+Return JSON in this EXACT structure:
 
 {{
   "steps": [
-    "step 1",
-    "step 2",
-    "step 3"
+    "first step",
+    "second step",
+    "third step"
   ]
 }}
 """
 
 
+def extract_json(text: str) -> str:
+    if not text:
+        raise ValueError("Empty LLM response")
+
+    text = text.strip()
+
+    # Remove markdown fences if present
+    if text.startswith("```"):
+        text = text.replace("```json", "").replace("```", "").strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No valid JSON found in LLM output")
+
+    return text[start : end + 1]
+
+
 def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Planner Node
-
-    Input state:
-    {
-        "goal": str
-    }
-
-    Output state additions:
-    {
-        "plan": list[str],
-        "current_step": int,
-        "observations": list
-    }
-    """
-
     goal = state.get("goal")
 
     if not isinstance(goal, str) or not goal.strip():
-        raise ValueError("PlannerNode: 'goal' must be a non-empty string")
+        raise ValueError("PlannerNode: goal must be a non-empty string")
 
     response = planner_llm.generate(
         PLANNER_PROMPT.format(goal=goal)
     )
 
-    # ----------------------------
-    # Parse LLM output safely
-    # ----------------------------
     try:
-        plan_json = json.loads(response)
+        cleaned = extract_json(response)
+        plan_json = json.loads(cleaned)
         steps = plan_json.get("steps", [])
 
-        if not isinstance(steps, list):
+        if not isinstance(steps, list) or not steps:
             raise ValueError("Invalid steps format")
 
-    except Exception:
-        # Hard fallback to keep agent alive
+    except Exception as e:
         steps = [f"Answer the user goal directly: {goal}"]
+        state.setdefault("observations", []).append({
+            "node": "planner",
+            "error": str(e),
+            "raw_output": response[:300]
+        })
 
-    # ----------------------------
-    # Return updated state
-    # ----------------------------
     return {
         **state,
         "plan": steps,
-        "current_step": 0,
-        "observations": [
-            {
-                "node": "planner",
-                "raw_output": response[:300]
-            }
-        ]
+        "current_step": 0
     }

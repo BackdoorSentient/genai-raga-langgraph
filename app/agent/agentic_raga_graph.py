@@ -14,20 +14,11 @@ from app.agent.critic import critic_node
 
 from app.agent.state import AgentState
 
+from functools import partial
+from app.nodes.web_node import web_node
 
-def build_agentic_raga_graph():
-    """
-    Agentic RAGA v2
 
-    Flow:
-    Goal
-      → Planner
-      → Decision
-      → RAG / Tool
-      → Summarize
-      → Critic
-      → Retry (Planner) OR End
-    """
+def build_agentic_raga_graph(vector_store):
 
     graph = StateGraph(AgentState)
 
@@ -38,8 +29,14 @@ def build_agentic_raga_graph():
     graph.add_node("planner", planner_node)
 
     graph.add_node("decision", decision_node)
-    graph.add_node("rag", rag_node)
-    graph.add_node("tool", tool_node)
+    # FIX: inject vector store into tool node
+    graph.add_node(
+        "tool",
+        partial(tool_node, retriever=vector_store)
+    )
+    graph.add_node("web", web_node)
+    # graph.add_node("rag", rag_node)
+    # graph.add_node("tool", tool_node)
     graph.add_node("summarize", summarize_node)
 
     graph.add_node("critic", critic_node)
@@ -62,16 +59,21 @@ def build_agentic_raga_graph():
 
     graph.add_conditional_edges(
         "decision",
-        lambda state: state["next_node"],
+        lambda s: s["next_node"],
         {
-            "rag": "rag",
+            # "rag": "rag",
             "tool": "tool",
-            "summarize": "summarize"
+            "web": "web",
+            "summarize": "summarize",
         }
     )
 
-    graph.add_edge("rag", "summarize")
-    graph.add_edge("tool", "summarize")
+    graph.add_edge("tool", "decision")
+    # graph.add_edge("rag", "summarize")
+    # graph.add_edge("summarize", "critic")
+    graph.add_edge("web", "decision")
+
+    
 
     # ------------------
     # Summarize → Critic
@@ -85,7 +87,7 @@ def build_agentic_raga_graph():
 
     graph.add_conditional_edges(
         "critic",
-        lambda state: state["critic_decision"],
+        lambda s: s["critic_decision"],
         {
             "retry": "planner",
             "accept": END

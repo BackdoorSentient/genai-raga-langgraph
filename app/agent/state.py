@@ -37,13 +37,18 @@ class AgentState(TypedDict, total=False):
     max_retries: int
 
     # ----- Routing -----
-    next_node: Literal["rag", "tool"]
+    # next_node: Literal["rag", "tool"]
+    next_node: Literal["rag", "tool", "summarize"]
 
     # ----- Agentic RAGA v2 -----
     goal: str
-    plan: List[Dict[str, Any]]
+    # plan: List[Dict[str, Any]]
+    plan: List[str]
     current_step: int
     observations: List[Any]
 
     # ----- Critic -----
     critic_decision: Literal["retry", "accept"]
+    critic_reason: str
+
+    web_attempted: bool

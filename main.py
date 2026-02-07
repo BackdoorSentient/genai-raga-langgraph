@@ -55,7 +55,7 @@ async def initialize_pipelines():
 
 
     # agentic_raga_agent = build_agentic_raga_graph(llm, vector_store)
-    agentic_raga_agent = build_agentic_raga_graph()
+    agentic_raga_agent = build_agentic_raga_graph(vector_store)
 
 # Startup
 @app.on_event("startup")

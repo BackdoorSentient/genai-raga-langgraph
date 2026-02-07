@@ -1,4 +1,4 @@
-from app.workflows.state_schema import RAGAState
+from app.raga.state import RAGAState
 from app.agent.nodes import (
     refine_query,
     retrieve_docs,
