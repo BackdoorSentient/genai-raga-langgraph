@@ -1,47 +1,29 @@
 from app.agent.state import AgentState
-from typing import List
-from duckduckgo_search import DDGS
+from typing import List, Any
 
 
 def web_node(state: AgentState) -> AgentState:
     query = state.get("refined_query") or state.get("query")
-
     if not query:
         raise ValueError("WebNode → query missing")
 
-    results: List[dict] = []
+    # TODO: replace with real web search
+    web_documents: List[Any] = []
 
-    with DDGS() as ddgs:
-        for r in ddgs.text(query, max_results=5):
-            results.append({
-                "content": r.get("body", ""),
-                "source": r.get("href", "")
-            })
+    # ✅ ACCUMULATE instead of overwrite
+    existing_docs = state.get("documents", [])
+    state["documents"] = existing_docs + web_documents
 
-    # Convert web results to pseudo-documents
-    documents = []
-    for r in results:
-        documents.append(
-            type(
-                "WebDoc",
-                (),
-                {
-                    "page_content": r["content"],
-                    "metadata": {"source": r["source"]}
-                }
-            )()
-        )
-
-    state["documents"] = documents
+    state["used_web"] = True
 
     state.setdefault("observations", []).append({
         "node": "web",
-        "query": query,
-        "results": len(documents)
+        "documents_found": len(web_documents),
+        "total_documents": len(state["documents"])
     })
 
     state.setdefault("steps", []).append(
-        f"WebNode → retrieved {len(documents)} web results"
+        f"WebNode → {len(web_documents)} docs (total={len(state['documents'])})"
     )
 
     return state

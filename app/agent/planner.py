@@ -1,41 +1,41 @@
 import json
-from typing import Dict, Any
 from app.llm.ollama_client import ollama_llm
-
-planner_llm = ollama_llm.with_model("qwen2.5:7b-instruct")
+from app.agent.state import AgentState
 
 
 PLANNER_PROMPT = """
 You are a planning agent.
 
-Your task:
-Break the user goal into clear, ordered steps.
-
 User goal:
 {goal}
 
-STRICT OUTPUT RULES:
+Break the user goal into clear ordered steps.
+
+STRICT RULES:
 - Output MUST be valid JSON
-- Output MUST start with '{{' and end with '}}'
 - NO markdown
 - NO explanations
-- NO extra text
+- Start with '{{' and end with '}}'
 
-Return JSON in this EXACT structure:
+Return ONLY this structure:
 
 {{
   "steps": [
-    "first step",
-    "second step",
-    "third step"
+    "step one",
+    "step two",
+    "step three"
   ]
 }}
 """
 
 
-def extract_json(text: str) -> str:
+def _extract_json(text: str) -> dict:
+    """
+    Safely extract JSON from noisy LLM output.
+    NEVER trusts the model.
+    """
     if not text:
-        raise ValueError("Empty LLM response")
+        raise ValueError("Empty planner output")
 
     text = text.strip()
 
@@ -47,39 +47,55 @@ def extract_json(text: str) -> str:
     end = text.rfind("}")
 
     if start == -1 or end == -1 or end <= start:
-        raise ValueError("No valid JSON found in LLM output")
+        raise ValueError("No JSON object found")
 
-    return text[start : end + 1]
+    try:
+        return json.loads(text[start:end + 1])
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}")
 
 
-def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def planner_node(state: AgentState) -> AgentState:
     goal = state.get("goal")
+    if not goal:
+        raise ValueError("Planner → goal missing")
 
-    if not isinstance(goal, str) or not goal.strip():
-        raise ValueError("PlannerNode: goal must be a non-empty string")
-
-    response = planner_llm.generate(
+    response = ollama_llm.generate(
         PLANNER_PROMPT.format(goal=goal)
     )
 
     try:
-        cleaned = extract_json(response)
-        plan_json = json.loads(cleaned)
-        steps = plan_json.get("steps", [])
+        parsed = _extract_json(response)
+        steps = parsed.get("steps")
 
-        if not isinstance(steps, list) or not steps:
+        if not isinstance(steps, list) or not all(
+            isinstance(s, str) and s.strip() for s in steps
+        ):
             raise ValueError("Invalid steps format")
 
     except Exception as e:
-        steps = [f"Answer the user goal directly: {goal}"]
+        # 🔒 Absolute safety fallback
+        steps = [
+            "Identify the query intent",
+            "Retrieve relevant information",
+            "Summarize grounded answer"
+        ]
+
         state.setdefault("observations", []).append({
             "node": "planner",
             "error": str(e),
-            "raw_output": response[:300]
+            "raw_output": response[:200]
         })
 
-    return {
-        **state,
-        "plan": steps,
-        "current_step": 0
-    }
+    # -------- Initialize state deterministically --------
+    state["plan"] = steps
+    state["current_step"] = 0
+    state["phase"] = "retrieve"
+    state["used_vector"] = False
+    state["used_web"] = False
+
+    state.setdefault("steps", []).append(
+        f"Planner → {len(steps)} steps created"
+    )
+
+    return state
