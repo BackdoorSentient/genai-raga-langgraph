@@ -53,7 +53,7 @@
 
 from langgraph.graph import StateGraph, START, END
 from app.nodes.raga_node import build_raga_node
-from app.raga.state_schema import RAGAState
+from app.raga.state import RAGAState
 
 def build_raga_graph(llm, vector_store):
     graph = StateGraph(RAGAState)
