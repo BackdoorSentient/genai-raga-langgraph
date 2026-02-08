@@ -1,7 +1,6 @@
 import time
 from app.raga.state import RAGAState
 
-
 def critic_node(state: RAGAState) -> RAGAState:
     t0 = time.time()
 

@@ -18,16 +18,12 @@ def build_raga_node(llm, vector_store):
                 f"RAGA attempt {state['retry_count'] + 1}"
             )
 
-            # 1. Query refinement
             state = refine_query(state, llm)
 
-            # 2. Retrieval
             state = retrieve_docs(state, vector_store)
 
-            # 3. Generation
             state = generate_answer(state, llm)
 
-            # 4. Validation
             state = validate_answer(state, llm)
 
             if state["grounded"]:

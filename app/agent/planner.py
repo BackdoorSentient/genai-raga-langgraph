@@ -39,7 +39,6 @@ def _extract_json(text: str) -> dict:
 
     text = text.strip()
 
-    # Remove markdown fences if present
     if text.startswith("```"):
         text = text.replace("```json", "").replace("```", "").strip()
 
@@ -74,7 +73,6 @@ def planner_node(state: AgentState) -> AgentState:
             raise ValueError("Invalid steps format")
 
     except Exception as e:
-        # 🔒 Absolute safety fallback
         steps = [
             "Identify the query intent",
             "Retrieve relevant information",
@@ -87,7 +85,6 @@ def planner_node(state: AgentState) -> AgentState:
             "raw_output": response[:200]
         })
 
-    # -------- Initialize state deterministically --------
     state["plan"] = steps
     state["current_step"] = 0
     state["phase"] = "retrieve"

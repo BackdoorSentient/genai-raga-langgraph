@@ -19,7 +19,6 @@ def web_node(state: AgentState) -> AgentState:
                 "origin": "web"
             })
 
-    # ✅ ACCUMULATE (never overwrite)
     existing_docs = state.get("documents", [])
     state["documents"] = existing_docs + web_documents
 
