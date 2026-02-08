@@ -1,6 +1,5 @@
 from app.agent.state import AgentState
 
-
 def rag_node(state: AgentState) -> AgentState:
     """
     RAGNode reasons over retrieved documents.
@@ -14,7 +13,6 @@ def rag_node(state: AgentState) -> AgentState:
         state["steps"].append("RAGNode → no documents to reason over")
         return state
 
-    # Lightweight evidence struct for downstream nodes
     evidence = []
     for doc in documents:
         evidence.append({

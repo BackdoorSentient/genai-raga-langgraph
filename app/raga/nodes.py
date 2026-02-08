@@ -1,8 +1,6 @@
 import time
 from app.raga.state import RAGAState
 
-
-# -------- QUERY REFINER --------
 def refine_query(state: RAGAState, llm) -> RAGAState:
     t0 = time.time()
 

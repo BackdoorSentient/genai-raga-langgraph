@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.workflows.raga_graph import build_raga_graph
+from app.raga.raga_graph import build_raga_graph
 
 router = APIRouter()
 graph = build_raga_graph()

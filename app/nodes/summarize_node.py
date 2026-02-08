@@ -25,7 +25,6 @@ def summarize_node(state: AgentState) -> AgentState:
         state["confidence"] = 0.0
         return state
 
-    # context = "\n\n".join(d.page_content for d in documents)
     context_chunks = [
         d.get("content", "")
         for d in documents
@@ -55,7 +54,6 @@ Answer (definition + explanation):
     answer = ollama_llm.generate(prompt)
 
     state["answer"] = answer
-    # state["grounded"] = "i don't know" not in answer.lower()
     state["grounded"] = not any(
         phrase in answer.lower()
         for phrase in ["i don't know", "not found", "no information"]

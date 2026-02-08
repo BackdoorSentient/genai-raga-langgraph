@@ -1,6 +1,5 @@
 from app.agent.state import AgentState
 
-
 def decision_node(state: AgentState) -> AgentState:
     """
     DecisionNode is now PURELY ANALYTICAL.

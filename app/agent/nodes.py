@@ -1,6 +1,5 @@
 from app.agent.state import AgentState
 
-# ---------------- QUERY REFINER ----------------
 def refine_query(state: AgentState, llm) -> AgentState:
     refined = llm.invoke(
         f"Rewrite this query for better document retrieval:\n{state['query']}"
@@ -13,7 +12,6 @@ def refine_query(state: AgentState, llm) -> AgentState:
         "refined_query": refined
     }
 
-# ---------------- RETRIEVER ----------------
 def retrieve_docs(state: AgentState, vector_store) -> AgentState:
     query = state["refined_query"] or state["query"]
     docs = vector_store.search(query, k=4)
@@ -23,7 +21,6 @@ def retrieve_docs(state: AgentState, vector_store) -> AgentState:
 
     return {**state, "documents": docs, "citations":sources}
 
-# ---------------- GENERATOR ----------------
 def generate_answer(state: AgentState, llm) -> AgentState:
     if not state["documents"]:
         return {
@@ -55,8 +52,6 @@ def generate_answer(state: AgentState, llm) -> AgentState:
         "citations": state["citations"]
     }
 
-
-# ---------------- VALIDATOR ----------------
 def validate_answer(state: AgentState, llm) -> AgentState:
     context = "\n\n".join(
         doc.page_content for doc in state["documents"]
@@ -89,7 +84,6 @@ def validate_answer(state: AgentState, llm) -> AgentState:
     if not grounded:
         confidence = 0.0
 
-    #increment retry only if not grounded
     retry_count = state["retry_count"] + (0 if grounded else 1)
 
     state["steps"].append("Answer validated")

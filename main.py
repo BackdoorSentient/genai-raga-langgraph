@@ -39,7 +39,6 @@ llm = Ollama(
     base_url=settings.OLLAMA_BASE_URL
 )
 
-# Initialization helper
 async def initialize_pipelines():
     global rag_pipeline, rag_agent, raga_agent, agentic_raga_agent
 
@@ -50,11 +49,8 @@ async def initialize_pipelines():
 
     rag_agent = build_rag_graph(llm, vector_store)
 
-    # RAGA-only graph (new, simple retry/grounding loop)
     raga_agent = build_raga_graph(llm, vector_store)
 
-
-    # agentic_raga_agent = build_agentic_raga_graph(llm, vector_store)
     agentic_raga_agent = build_agentic_raga_graph(vector_store)
 
 # Startup
@@ -144,14 +140,6 @@ async def agentic_raga_query(query: str):
 
     result = agentic_raga_agent.invoke(state)
 
-    # return {
-    #     "query": query,
-    #     "answer": result["answer"],
-    #     "plan": result["plan"],
-    #     "critic_decision": result["critic_decision"],
-    #     "confidence": result["confidence"],
-    #     "citations": result["citations"]
-    # }
     return {
     "query": query,
     "answer": result["answer"],
