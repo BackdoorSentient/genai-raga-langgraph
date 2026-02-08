@@ -1,33 +1,73 @@
+# from app.agent.state import AgentState
+# from typing import Any, List
+
+
+# def tool_node(state: AgentState, retriever: Any) -> AgentState:
+#     query = state.get("refined_query") or state.get("query")
+#     if not query:
+#         raise ValueError("ToolNode → query missing")
+
+#     documents: List[Any] = retriever.search(query)
+
+#     # ✅ ACCUMULATE documents instead of overwriting
+#     existing_docs = state.get("documents", [])
+#     state["documents"] = existing_docs + documents
+
+#     state["used_vector"] = True
+
+#     state.setdefault("observations", []).append({
+#         "node": "tool",
+#         "documents_found": len(documents),
+#         "total_documents": len(state["documents"])
+#     })
+
+#     state.setdefault("steps", []).append(
+#         f"ToolNode → {len(documents)} docs (total={len(state['documents'])})"
+#     )
+
+#     return state
+
 from app.agent.state import AgentState
-from typing import List, Any
+from typing import Any, List
 
 
 def tool_node(state: AgentState, retriever: Any) -> AgentState:
-    """
-    Executes retrieval tool based on current plan step.
-    """
-
     query = state.get("refined_query") or state.get("query")
-    current_step = state.get("current_step", 0)
+    if not query:
+        raise ValueError("ToolNode → query missing")
 
-    # Execute retrieval
-    documents: List[Any] = retriever.search(query)
+    retrieved_docs = retriever.search(query)
 
-    # Update state
-    state["documents"] = documents
+    normalized_docs = []
+    for doc in retrieved_docs:
+        normalized_docs.append({
+            "content": getattr(doc, "page_content", str(doc))[:1000],
+            "source": getattr(doc, "metadata", {}).get("source", "vector_store"),
+            "origin": "vector"
+        })
 
-    # Log observation
-    observation = {
-        "step": current_step,
-        "tool": "vector_retriever",
-        "query": query,
-        "documents_found": len(documents)
-    }
+    # ✅ ACCUMULATE
+    existing_docs = state.get("documents", [])
+    state["documents"] = existing_docs + normalized_docs
 
-    state.setdefault("observations", []).append(observation)
+    # ---- Citations ----
+    state.setdefault("citations", [])
+    for d in normalized_docs:
+        state["citations"].append(d["source"])
 
+    state["used_vector"] = True
+
+    # ---- Steps (append-only) ----
     state.setdefault("steps", []).append(
-        f"ToolNode → Retrieved {len(documents)} documents"
+        f"ToolNode → {len(normalized_docs)} vector docs (total={len(state['documents'])})"
     )
+
+    # ---- Observability ----
+    state.setdefault("observations", []).append({
+        "node": "tool",
+        "documents_found": len(normalized_docs),
+        "total_documents": len(state["documents"]),
+        "source": "vector"
+    })
 
     return state

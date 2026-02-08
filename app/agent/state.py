@@ -1,49 +1,37 @@
-from typing import TypedDict, List, Any, Dict, Literal
-
-# class AgentState(TypedDict, total=False):
-#     # ----- Existing RAGA -----
-#     query: str
-#     refined_query: str
-#     documents: List[Any]
-#     answer: str
-#     grounded: bool
-#     retry_count: int
-#     max_retries: int
-#     confidence: float
-#     citations: List[str]
-#     steps: List[str]
-
-#     # ----- Agentic RAGA v2 -----
-#     goal: str
-#     plan: List[Dict[str, Any]]
-#     current_step: int
-#     observations: List[Any]
-#     critic_decision: str
+from typing import TypedDict, List, Any, Literal
 
 
 class AgentState(TypedDict, total=False):
-    # ----- Core RAGA -----
+    # -------- Core --------
     query: str
     refined_query: str
-    documents: List[Any]
     answer: str
+    documents: List[Any]
     grounded: bool
     confidence: float
     citations: List[str]
-    steps: List[str]
 
-    # ----- Retry control -----
+    # -------- Planning --------
+    goal: str
+    plan: List[str]
+    current_step: int
+
+    # -------- Control --------
+    phase: Literal["retrieve", "summarize", "critic", "end"]
+    next_node: str
+
+    # -------- Retrieval flags --------
+    used_vector: bool
+    used_web: bool
+
+    # -------- Retry --------
     retry_count: int
     max_retries: int
 
-    # ----- Routing -----
-    next_node: Literal["rag", "tool"]
-
-    # ----- Agentic RAGA v2 -----
-    goal: str
-    plan: List[Dict[str, Any]]
-    current_step: int
+    # -------- Observability --------
     observations: List[Any]
+    steps: List[str]
 
-    # ----- Critic -----
-    critic_decision: Literal["retry", "accept"]
+    # -------- Critic --------
+    critic_decision: Literal["accept", "retry"]
+    critic_reason: str

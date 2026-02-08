@@ -1,13 +1,17 @@
 from app.agent.state import AgentState
-from typing import Any, List
 from app.llm.ollama_client import ollama_llm
 
 
 SYSTEM_PROMPT = """
-You are a grounded AI assistant.
-Answer ONLY using the provided documents.
-If the answer cannot be found, say so clearly.
-Cite sources explicitly.
+You are answering a factual question using ONLY the provided documents.
+
+RULES:
+- Use ONLY information present in the documents
+- Do NOT add external knowledge
+- If multiple facts are present, COMBINE them into a clear explanation
+- Answer fully, not minimally
+- 2–4 sentences if possible
+- If information is missing, say so clearly
 """
 
 
@@ -16,24 +20,23 @@ def summarize_node(state: AgentState) -> AgentState:
     query = state.get("query", "")
 
     if not documents:
-        state["answer"] = "No relevant information found in the knowledge base."
+        state["answer"] = "No grounded information found."
         state["grounded"] = False
         state["confidence"] = 0.0
-        state["citations"] = []
         return state
 
-    context_chunks: List[str] = []
-    citations: List[str] = []
+    # context = "\n\n".join(d.page_content for d in documents)
+    context_chunks = [
+        d.get("content", "")
+        for d in documents
+        if isinstance(d, dict) and d.get("content")
+    ]
 
-    for i, doc in enumerate(documents):
-        context_chunks.append(doc.page_content)
-        # if "source" in doc.metadata:
-        #     citations.append(doc.metadata["source"])
-        # else:
-        #     citations.append(f"doc_{i}")
-        citations.append(
-            doc.metadata.get("source", f"doc_{i}")
-        )
+    if not context_chunks:
+        state["answer"] = "No usable grounded content found."
+        state["grounded"] = False
+        state["confidence"] = 0.0
+        return state
 
     context = "\n\n".join(context_chunks)
 
@@ -46,26 +49,21 @@ Question:
 Documents:
 {context}
 
-Answer:
+Answer (definition + explanation):
 """
 
-    # response = llm.invoke(prompt)
-
-    # answer = response.strip()
     answer = ollama_llm.generate(prompt)
 
-    # Simple grounding heuristic
-    grounded = "I don't know" not in answer.lower()
-
-    confidence = min(0.95, 0.5 + (len(documents) * 0.1))
-
     state["answer"] = answer
-    state["grounded"] = grounded
-    state["confidence"] = round(confidence, 2)
-    state["citations"] = list(set(citations))
+    # state["grounded"] = "i don't know" not in answer.lower()
+    state["grounded"] = not any(
+        phrase in answer.lower()
+        for phrase in ["i don't know", "not found", "no information"]
+    )
+    state["confidence"] = min(0.95, 0.5 + len(documents) * 0.1)
 
     state.setdefault("steps", []).append(
-        "SummarizeNode → Generated grounded answer"
+        "SummarizeNode → answer generated"
     )
 
     return state

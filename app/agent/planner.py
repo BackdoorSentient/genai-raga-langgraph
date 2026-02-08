@@ -1,90 +1,101 @@
 import json
-from typing import Dict, Any, List
 from app.llm.ollama_client import ollama_llm
+from app.agent.state import AgentState
 
-# --------------------------------------------------
-# Use a planner-specific model WITHOUT breaking global usage
-# --------------------------------------------------
-planner_llm = ollama_llm.with_model("qwen2.5:7b-instruct")
 
-# --------------------------------------------------
-# Planner prompt (escaped for .format)
-# --------------------------------------------------
 PLANNER_PROMPT = """
-You are a planning agent in an Agentic AI system.
+You are a planning agent.
 
 User goal:
-"{goal}"
+{goal}
 
-Break this goal into a list of clear, ordered steps.
+Break the user goal into clear ordered steps.
 
-Rules:
-- Return ONLY valid JSON
-- No explanations
-- No markdown
-- Output MUST strictly follow this format:
+STRICT RULES:
+- Output MUST be valid JSON
+- NO markdown
+- NO explanations
+- Start with '{{' and end with '}}'
+
+Return ONLY this structure:
 
 {{
   "steps": [
-    "step 1",
-    "step 2",
-    "step 3"
+    "step one",
+    "step two",
+    "step three"
   ]
 }}
 """
 
 
-def planner_node(state: Dict[str, Any]) -> Dict[str, Any]:
+def _extract_json(text: str) -> dict:
     """
-    Planner Node
-
-    Input state:
-    {
-        "goal": str
-    }
-
-    Output state additions:
-    {
-        "plan": list[str],
-        "current_step": int,
-        "observations": list
-    }
+    Safely extract JSON from noisy LLM output.
+    NEVER trusts the model.
     """
+    if not text:
+        raise ValueError("Empty planner output")
 
+    text = text.strip()
+
+    # Remove markdown fences if present
+    if text.startswith("```"):
+        text = text.replace("```json", "").replace("```", "").strip()
+
+    start = text.find("{")
+    end = text.rfind("}")
+
+    if start == -1 or end == -1 or end <= start:
+        raise ValueError("No JSON object found")
+
+    try:
+        return json.loads(text[start:end + 1])
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {e}")
+
+
+def planner_node(state: AgentState) -> AgentState:
     goal = state.get("goal")
+    if not goal:
+        raise ValueError("Planner → goal missing")
 
-    if not isinstance(goal, str) or not goal.strip():
-        raise ValueError("PlannerNode: 'goal' must be a non-empty string")
-
-    response = planner_llm.generate(
+    response = ollama_llm.generate(
         PLANNER_PROMPT.format(goal=goal)
     )
 
-    # ----------------------------
-    # Parse LLM output safely
-    # ----------------------------
     try:
-        plan_json = json.loads(response)
-        steps = plan_json.get("steps", [])
+        parsed = _extract_json(response)
+        steps = parsed.get("steps")
 
-        if not isinstance(steps, list):
+        if not isinstance(steps, list) or not all(
+            isinstance(s, str) and s.strip() for s in steps
+        ):
             raise ValueError("Invalid steps format")
 
-    except Exception:
-        # Hard fallback to keep agent alive
-        steps = [f"Answer the user goal directly: {goal}"]
-
-    # ----------------------------
-    # Return updated state
-    # ----------------------------
-    return {
-        **state,
-        "plan": steps,
-        "current_step": 0,
-        "observations": [
-            {
-                "node": "planner",
-                "raw_output": response[:300]
-            }
+    except Exception as e:
+        # 🔒 Absolute safety fallback
+        steps = [
+            "Identify the query intent",
+            "Retrieve relevant information",
+            "Summarize grounded answer"
         ]
-    }
+
+        state.setdefault("observations", []).append({
+            "node": "planner",
+            "error": str(e),
+            "raw_output": response[:200]
+        })
+
+    # -------- Initialize state deterministically --------
+    state["plan"] = steps
+    state["current_step"] = 0
+    state["phase"] = "retrieve"
+    state["used_vector"] = False
+    state["used_web"] = False
+
+    state.setdefault("steps", []).append(
+        f"Planner → {len(steps)} steps created"
+    )
+
+    return state

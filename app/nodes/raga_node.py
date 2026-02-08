@@ -1,13 +1,41 @@
-# app/nodes/raga_node.py
-from app.agent.state import AgentState
+from app.raga.state import RAGAState
+from app.agent.nodes import (
+    refine_query,
+    retrieve_docs,
+    generate_answer,
+    validate_answer,
+)
 
-def rag_node(state: AgentState) -> AgentState:
-    """
-    RAG node in agentic flow.
-    Retrieval is handled by tool_node.
-    This node only advances the graph.
-    """
-    state.setdefault("steps", []).append(
-        "RAGNode → Skipped (Agentic flow)"
-    )
-    return state
+def build_raga_node(llm, vector_store):
+    def raga_node(state: RAGAState) -> RAGAState:
+        state.setdefault("steps", [])
+        state.setdefault("retry_count", 0)
+        state.setdefault("max_retries", 2)
+        state.setdefault("grounded", False)
+
+        while state["retry_count"] <= state["max_retries"]:
+            state["steps"].append(
+                f"RAGA attempt {state['retry_count'] + 1}"
+            )
+
+            # 1. Query refinement
+            state = refine_query(state, llm)
+
+            # 2. Retrieval
+            state = retrieve_docs(state, vector_store)
+
+            # 3. Generation
+            state = generate_answer(state, llm)
+
+            # 4. Validation
+            state = validate_answer(state, llm)
+
+            if state["grounded"]:
+                state["steps"].append("Answer accepted (grounded)")
+                break
+
+            state["steps"].append("Answer not grounded, retrying")
+
+        return state
+
+    return raga_node
