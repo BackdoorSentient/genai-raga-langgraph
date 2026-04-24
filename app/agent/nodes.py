@@ -1,4 +1,6 @@
+# app/agent/nodes.py
 from app.agent.state import AgentState
+
 
 def refine_query(state: AgentState, llm) -> AgentState:
     refined = llm.invoke(
@@ -9,26 +11,30 @@ def refine_query(state: AgentState, llm) -> AgentState:
 
     return {
         **state,
-        "refined_query": refined
+        "refined_query": refined,
     }
+
 
 def retrieve_docs(state: AgentState, vector_store) -> AgentState:
     query = state["refined_query"] or state["query"]
     docs = vector_store.search(query, k=4)
+    # docs is now List[Document] — .source is a typed field, not a dict key
     sources = [doc.source for doc in docs]
 
     state["steps"].append(f"Retrieved {len(docs)} documents")
 
-    return {**state, "documents": docs, "citations":sources}
+    return {**state, "documents": docs, "citations": sources}
+
 
 def generate_answer(state: AgentState, llm) -> AgentState:
     if not state["documents"]:
         return {
             **state,
             "answer": "I could not find relevant information in the documents.",
-            "citations": []
+            "citations": [],
         }
 
+    # .page_content works via the @property shim on Document
     context = "\n\n".join(doc.page_content for doc in state["documents"])
 
     prompt = f"""
@@ -49,13 +55,13 @@ def generate_answer(state: AgentState, llm) -> AgentState:
     return {
         **state,
         "answer": answer,
-        "citations": state["citations"]
+        "citations": state["citations"],
     }
 
+
 def validate_answer(state: AgentState, llm) -> AgentState:
-    context = "\n\n".join(
-        doc.page_content for doc in state["documents"]
-    )
+    # .page_content works via the @property shim on Document
+    context = "\n\n".join(doc.page_content for doc in state["documents"])
 
     prompt = f"""
     Context:
@@ -75,10 +81,8 @@ def validate_answer(state: AgentState, llm) -> AgentState:
     grounded = "GROUNDED: YES" in result.upper()
 
     try:
-        confidence = float(
-            result.upper().split("CONFIDENCE:")[1].strip()
-        )
-    except:
+        confidence = float(result.upper().split("CONFIDENCE:")[1].strip())
+    except Exception:
         confidence = 0.0
 
     if not grounded:
@@ -93,5 +97,5 @@ def validate_answer(state: AgentState, llm) -> AgentState:
         "grounded": grounded,
         "confidence": confidence,
         "retry_count": retry_count,
-        "citations":state['citations']
+        "citations": state["citations"],
     }

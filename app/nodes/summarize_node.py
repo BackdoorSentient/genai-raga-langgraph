@@ -1,5 +1,7 @@
+# app/nodes/summarize_node.py
 from app.agent.state import AgentState
 from app.llm.ollama_client import ollama_llm
+from app.schema import Document
 
 
 SYSTEM_PROMPT = """
@@ -25,11 +27,16 @@ def summarize_node(state: AgentState) -> AgentState:
         state["confidence"] = 0.0
         return state
 
-    context_chunks = [
-        d.get("content", "")
-        for d in documents
-        if isinstance(d, dict) and d.get("content")
-    ]
+    context_chunks = []
+    for d in documents:
+        if isinstance(d, Document):
+            text = d.content          # ← was: d.get("content") on a dict — always missed
+            if text:
+                context_chunks.append(text)
+        elif isinstance(d, dict):     # safety fallback — handles any legacy dicts
+            text = d.get("content", "")
+            if text:
+                context_chunks.append(text)
 
     if not context_chunks:
         state["answer"] = "No usable grounded content found."

@@ -1,3 +1,4 @@
+# app/rag_system/rag_pipeline.py
 from typing import Dict, Any
 from app.llm.factory import get_llm
 
@@ -26,7 +27,7 @@ class RAGPipeline:
 
         # Build context
         context = "\n\n".join(d.page_content for d in docs)
-        sources = list({d.metadata.get("source") for d in docs if d.metadata})
+        sources = list({d.source for d in docs})   # ← was: d.metadata.get("source") — Document has no .metadata
 
         # Prompt
         prompt = f"""

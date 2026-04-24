@@ -141,17 +141,17 @@ async def agentic_raga_query(query: str):
     result = agentic_raga_agent.invoke(state)
 
     return {
-    "query": query,
-    "answer": result["answer"],
-    "grounded": result.get("grounded", False),
-    "confidence": result.get("confidence", 0.0),
-    "citations": list(set(result.get("citations", []))),
-    "sources_used": list(
-        {d["origin"] for d in result.get("documents", [])}
-    ),
-    "steps": result.get("steps", []),
-    "critic_decision": result.get("critic_decision")
-}
+        "query": query,
+        "answer": result["answer"],
+        "grounded": result.get("grounded", False),
+        "confidence": result.get("confidence", 0.0),
+        "citations": list(set(result.get("citations", []))),
+        "sources_used": list(
+            {d.origin for d in result.get("documents", [])}   # ← was: d["origin"]
+        ),
+        "steps": result.get("steps", []),
+        "critic_decision": result.get("critic_decision")
+    }
 
 # Health APIs
 @app.get("/health")
