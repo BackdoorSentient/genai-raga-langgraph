@@ -1,26 +1,20 @@
-
+# main.py
 import uvicorn
-from fastapi import FastAPI, HTTPException
+import time
 from typing import Any
 
-import time
-
-from langchain_community.llms.ollama import Ollama
+from fastapi import FastAPI, HTTPException
 
 from app.utils.ollama import is_ollama_running
 from app.rag_system.vector_store import VectorStore
 from app.rag_system.ingestion import load_and_chunk_docs
 from app.config.settings import get_settings
-from app.agent.graph import build_rag_graph
-
+from app.llm.factory import get_llm                        # ← single LLM entry point
 
 from app.rag_system.rag_pipeline import RAGPipeline
-
-# --- RAGA (non-agentic) ---
+from app.agent.graph import build_rag_graph
 from app.raga.graph import build_raga_graph
 from app.raga.state import RAGAState
-
-# --- Agentic RAGA ---
 from app.agent.agentic_raga_graph import build_agentic_raga_graph
 from app.agent.state import AgentState
 
@@ -34,10 +28,6 @@ rag_agent: Any = None
 raga_agent: Any = None
 agentic_raga_agent: Any = None
 
-llm = Ollama(
-    model=settings.OLLAMA_MODEL,
-    base_url=settings.OLLAMA_BASE_URL
-)
 
 async def initialize_pipelines():
     global rag_pipeline, rag_agent, raga_agent, agentic_raga_agent
@@ -45,15 +35,14 @@ async def initialize_pipelines():
     documents = load_and_chunk_docs(settings.RAW_DATA_DIR)
     vector_store.build_or_load(documents)
 
+    llm = get_llm()                                        # ← one call, reads .env
+
     rag_pipeline = RAGPipeline(vector_store)
-
     rag_agent = build_rag_graph(llm, vector_store)
-
     raga_agent = build_raga_graph(llm, vector_store)
-
     agentic_raga_agent = build_agentic_raga_graph(vector_store)
 
-# Startup
+
 @app.on_event("startup")
 async def startup_event():
     try:
@@ -65,7 +54,7 @@ async def startup_event():
     if not is_ollama_running():
         print("Ollama is NOT running. Start with `ollama serve`.")
 
-# Reload API
+
 @app.post("/reload")
 async def reload_pipelines():
     try:
@@ -73,21 +62,17 @@ async def reload_pipelines():
         return {"status": "RAG and RAGA pipelines reloaded"}
     except Exception as e:
         raise HTTPException(500, str(e))
-    
+
+
 @app.post("/rag")
 def rag_query(question: str):
     if not rag_pipeline:
         raise HTTPException(503, "RAG pipeline not initialized")
-
     if not is_ollama_running():
-        raise HTTPException(
-            status_code=503,
-            detail="Ollama is not running"
-        )
-
+        raise HTTPException(503, "Ollama is not running")
     return rag_pipeline.ask(question)
 
-# RAGA Query API
+
 @app.post("/raga")
 async def raga_query(query: str):
     if not raga_agent:
@@ -99,13 +84,10 @@ async def raga_query(query: str):
         "citations": [],
         "steps": [],
         "timeline": [],
-
         "retry_count": 0,
         "max_retries": 2,
-
         "start_time": time.time(),
         "timeout_seconds": 20,
-
         "terminate": False,
     }
 
@@ -115,11 +97,11 @@ async def raga_query(query: str):
 
     return result
 
+
 @app.post("/agentic-raga")
 async def agentic_raga_query(query: str):
     if not agentic_raga_agent:
         raise HTTPException(503, "Agentic RAGA not initialized")
-
     if not is_ollama_running():
         raise HTTPException(503, "Ollama not running")
 
@@ -135,7 +117,12 @@ async def agentic_raga_query(query: str):
         "retry_count": 0,
         "max_retries": 3,
         "confidence": 0.0,
-        "citations": []
+        "citations": [],
+        "steps": [],
+        "used_vector": False,
+        "used_web": False,
+        "phase": "retrieve",
+        "grounded": False,
     }
 
     result = agentic_raga_agent.invoke(state)
@@ -147,32 +134,36 @@ async def agentic_raga_query(query: str):
         "confidence": result.get("confidence", 0.0),
         "citations": list(set(result.get("citations", []))),
         "sources_used": list(
-            {d.origin for d in result.get("documents", [])}   # ← was: d["origin"]
+            {d.origin for d in result.get("documents", [])}
         ),
         "steps": result.get("steps", []),
-        "critic_decision": result.get("critic_decision")
+        "critic_decision": result.get("critic_decision"),
     }
 
-# Health APIs
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "raga_ready": rag_agent is not None,
         "vector_store_loaded": vector_store.db is not None,
-        "ollama_running": is_ollama_running()
+        "ollama_running": is_ollama_running(),
+        "llm_provider": settings.LLM_PROVIDER,
+        "llm_model": settings.OLLAMA_MODEL,
     }
+
 
 @app.get("/ollama/health")
 def ollama_health():
     return {
         "ollama_running": is_ollama_running(),
-        "ollama_url": settings.OLLAMA_BASE_URL
+        "ollama_url": settings.OLLAMA_BASE_URL,
     }
+
 
 if __name__ == "__main__":
     uvicorn.run(
-        "app.main:app",
+        "main:app",
         host="127.0.0.1",
         port=8000,
         reload=True

@@ -18,7 +18,8 @@ class Settings(BaseSettings):
     # Ollama
     OLLAMA_BASE_URL: str = "http://127.0.0.1:11434"
     # OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "llama3"
+    # OLLAMA_MODEL: str = "llama3"
+    OLLAMA_MODEL: str = "qwen2.5:7b-instruct"
 
     # OpenAI
     OPENAI_API_KEY: str | None = None
