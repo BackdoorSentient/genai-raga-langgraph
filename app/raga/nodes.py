@@ -1,5 +1,7 @@
+# app/raga/nodes.py
 import time
 from app.raga.state import RAGAState
+
 
 def refine_query(state: RAGAState, llm) -> RAGAState:
     t0 = time.time()
@@ -20,7 +22,6 @@ def refine_query(state: RAGAState, llm) -> RAGAState:
     return state
 
 
-# -------- RETRIEVER --------
 def retrieve_docs(state: RAGAState, vector_store) -> RAGAState:
     t0 = time.time()
 
@@ -36,19 +37,26 @@ def retrieve_docs(state: RAGAState, vector_store) -> RAGAState:
     })
 
     state["documents"] = docs
-    state["citations"] = [doc.source for doc in docs]
+    state["citations"] = [doc.source for doc in docs]   # ← doc.source is a typed field on Document
     return state
 
 
-# -------- GENERATOR --------
 def generate_answer(state: RAGAState, llm) -> RAGAState:
     t0 = time.time()
 
-    context = "\n\n".join(doc.page_content for doc in state["documents"])
+    docs = state.get("documents", [])
+
+    if not docs:
+        state["answer"] = "I don't have reliable information about this."
+        state.setdefault("steps", []).append("Answer generation skipped — no documents")
+        return state
+
+    # .page_content works via the @property shim on Document
+    context = "\n\n".join(doc.page_content for doc in docs)
 
     prompt = f"""
     Answer using ONLY the context.
-    If unsure, say you are unsure.
+    If the context does not contain a clear answer, say: "I don't have reliable information about this."
 
     Context:
     {context}
@@ -71,11 +79,19 @@ def generate_answer(state: RAGAState, llm) -> RAGAState:
     return state
 
 
-# -------- VALIDATOR --------
 def validate_answer(state: RAGAState, llm) -> RAGAState:
     t0 = time.time()
 
-    context = "\n\n".join(doc.page_content for doc in state["documents"])
+    docs = state.get("documents", [])
+
+    if not docs:
+        state["grounded"] = False
+        state["confidence"] = 0.0
+        state["retry_count"] = state.get("retry_count", 0) + 1
+        return state
+
+    # .page_content works via the @property shim on Document
+    context = "\n\n".join(doc.page_content for doc in docs)
 
     prompt = f"""
     Context:
@@ -95,7 +111,7 @@ def validate_answer(state: RAGAState, llm) -> RAGAState:
     grounded = "GROUNDED: YES" in result.upper()
     try:
         confidence = float(result.upper().split("CONFIDENCE:")[1].strip())
-    except:
+    except Exception:
         confidence = 0.0
 
     latency = round((time.time() - t0) * 1000, 2)

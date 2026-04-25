@@ -6,7 +6,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 
 from app.config.settings import settings
-from app.schema import Document          # ← was: from app.agent.document import AgentDocument
+from app.schema import Document                  # ← was: AgentDocument
 
 
 class VectorStore:
@@ -48,14 +48,15 @@ class VectorStore:
         if not self.db:
             raise RuntimeError("Vector store not initialized. Call build_or_load() first.")
 
-        results = self.db.similarity_search(query, k=k)
+        results_with_scores = self.db.similarity_search_with_score(query, k=k)
 
         return [
-            Document(                                   # ← was: AgentDocument(page_content=..., metadata=..., source=...)
-                content=r.page_content,                # ← unified field name
+            Document(
+                content=r.page_content,
                 source=r.metadata.get("source", "unknown"),
                 origin="vector",
                 page=r.metadata.get("page"),
             )
-            for r in results
+            for r, score in results_with_scores
+            if score < 1.2        # ← FAISS L2 distance filter — drops irrelevant chunks
         ]
