@@ -1,6 +1,7 @@
-import json
+# app/agent/planner.py
 from app.llm.ollama_client import ollama_llm
 from app.agent.state import AgentState
+from app.utils.json_utils import extract_json          
 
 
 PLANNER_PROMPT = """
@@ -28,30 +29,11 @@ Return ONLY this structure:
 }}
 """
 
-
-def _extract_json(text: str) -> dict:
-    """
-    Safely extract JSON from noisy LLM output.
-    NEVER trusts the model.
-    """
-    if not text:
-        raise ValueError("Empty planner output")
-
-    text = text.strip()
-
-    if text.startswith("```"):
-        text = text.replace("```json", "").replace("```", "").strip()
-
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start == -1 or end == -1 or end <= start:
-        raise ValueError("No JSON object found")
-
-    try:
-        return json.loads(text[start:end + 1])
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {e}")
+FALLBACK_STEPS = [
+    "Identify the query intent",
+    "Retrieve relevant information",
+    "Summarize grounded answer"
+]
 
 
 def planner_node(state: AgentState) -> AgentState:
@@ -59,12 +41,28 @@ def planner_node(state: AgentState) -> AgentState:
     if not goal:
         raise ValueError("Planner → goal missing")
 
-    response = ollama_llm.generate(
-        PLANNER_PROMPT.format(goal=goal)
-    )
+    try:
+        response = ollama_llm.generate(
+            PLANNER_PROMPT.format(goal=goal)
+        )
+    except Exception as exc:
+        state["plan"] = FALLBACK_STEPS
+        state["current_step"] = 0
+        state["phase"] = "retrieve"
+        state["used_vector"] = False
+        state["used_web"] = False
+        state.setdefault("observations", []).append({
+            "node": "planner",
+            "error": f"LLM unavailable: {exc}",
+            "fallback": True
+        })
+        state.setdefault("steps", []).append(
+            f"Planner → LLM failed, using {len(FALLBACK_STEPS)} fallback steps"
+        )
+        return state
 
     try:
-        parsed = _extract_json(response)
+        parsed = extract_json(response)           
         steps = parsed.get("steps")
 
         if not isinstance(steps, list) or not all(
@@ -73,12 +71,7 @@ def planner_node(state: AgentState) -> AgentState:
             raise ValueError("Invalid steps format")
 
     except Exception as e:
-        steps = [
-            "Identify the query intent",
-            "Retrieve relevant information",
-            "Summarize grounded answer"
-        ]
-
+        steps = FALLBACK_STEPS
         state.setdefault("observations", []).append({
             "node": "planner",
             "error": str(e),

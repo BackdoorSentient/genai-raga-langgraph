@@ -6,9 +6,18 @@ from app.raga.state import RAGAState
 def refine_query(state: RAGAState, llm) -> RAGAState:
     t0 = time.time()
 
-    refined = llm.invoke(
-        f"Rewrite this query for better document retrieval:\n{state['query']}"
-    )
+    # ── Issue 11: wrap LLM call ───────────────────────────────────────────────
+    try:
+        refined = llm.invoke(
+            f"Rewrite this query for better document retrieval:\n{state['query']}"
+        )
+    except Exception as exc:
+        refined = state["query"]   # fallback: use original query unchanged
+        state.setdefault("observations", []).append({
+            "node": "refine_query",
+            "error": f"LLM unavailable: {exc}"
+        })
+    # ─────────────────────────────────────────────────────────────────────────
 
     latency = round((time.time() - t0) * 1000, 2)
 
@@ -37,7 +46,7 @@ def retrieve_docs(state: RAGAState, vector_store) -> RAGAState:
     })
 
     state["documents"] = docs
-    state["citations"] = [doc.source for doc in docs]   # ← doc.source is a typed field on Document
+    state["citations"] = [doc.source for doc in docs]
     return state
 
 
@@ -51,7 +60,6 @@ def generate_answer(state: RAGAState, llm) -> RAGAState:
         state.setdefault("steps", []).append("Answer generation skipped — no documents")
         return state
 
-    # .page_content works via the @property shim on Document
     context = "\n\n".join(doc.page_content for doc in docs)
 
     prompt = f"""
@@ -65,7 +73,16 @@ def generate_answer(state: RAGAState, llm) -> RAGAState:
     {state['query']}
     """
 
-    answer = llm.invoke(prompt)
+    # ── Issue 11: wrap LLM call ───────────────────────────────────────────────
+    try:
+        answer = llm.invoke(prompt)
+    except Exception as exc:
+        answer = "I don't have reliable information about this."
+        state.setdefault("observations", []).append({
+            "node": "generate_answer",
+            "error": f"LLM unavailable: {exc}"
+        })
+    # ─────────────────────────────────────────────────────────────────────────
 
     latency = round((time.time() - t0) * 1000, 2)
 
@@ -87,10 +104,9 @@ def validate_answer(state: RAGAState, llm) -> RAGAState:
     if not docs:
         state["grounded"] = False
         state["confidence"] = 0.0
-        state["retry_count"] = state.get("retry_count", 0) + 1
+        # ── Issue 5: NO retry_count increment — raga critic handles it ───────
         return state
 
-    # .page_content works via the @property shim on Document
     context = "\n\n".join(doc.page_content for doc in docs)
 
     prompt = f"""
@@ -106,7 +122,19 @@ def validate_answer(state: RAGAState, llm) -> RAGAState:
     CONFIDENCE: <0 to 1>
     """
 
-    result = llm.invoke(prompt)
+    # ── Issue 11: wrap LLM call ───────────────────────────────────────────────
+    try:
+        result = llm.invoke(prompt)
+    except Exception as exc:
+        state["grounded"] = False
+        state["confidence"] = 0.0
+        state.setdefault("observations", []).append({
+            "node": "validate_answer",
+            "error": f"LLM unavailable: {exc}"
+        })
+        # ── Issue 5: NO retry_count increment here ────────────────────────────
+        return state
+    # ─────────────────────────────────────────────────────────────────────────
 
     grounded = "GROUNDED: YES" in result.upper()
     try:
@@ -124,6 +152,6 @@ def validate_answer(state: RAGAState, llm) -> RAGAState:
 
     state["grounded"] = grounded
     state["confidence"] = confidence if grounded else 0.0
-    state["retry_count"] = state.get("retry_count", 0) + (0 if grounded else 1)
+    # ── Issue 5: retry_count removed — raga/critic.py owns the increment ─────
 
     return state

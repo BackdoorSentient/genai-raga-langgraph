@@ -31,8 +31,8 @@ def summarize_node(state: AgentState) -> AgentState:
     for d in documents:
         if isinstance(d, Document):
             if d.content:
-                context_chunks.append(d.content)    # ← was: d.get("content") on a dict — always failed
-        elif isinstance(d, dict):                   # safety fallback
+                context_chunks.append(d.content)
+        elif isinstance(d, dict):
             text = d.get("content", "")
             if text:
                 context_chunks.append(text)
@@ -57,7 +57,22 @@ Documents:
 Answer:
 """
 
-    answer = ollama_llm.generate(prompt)
+    # ── Issue 11: wrap LLM call, never crash on Ollama failure ───────────────
+    try:
+        answer = ollama_llm.generate(prompt)
+    except Exception as exc:
+        state["answer"] = "I don't have reliable information about this."
+        state["grounded"] = False
+        state["confidence"] = 0.0
+        state.setdefault("observations", []).append({
+            "node": "summarize",
+            "error": f"LLM unavailable: {exc}"
+        })
+        state.setdefault("steps", []).append(
+            "SummarizeNode → LLM failed, returning fallback"
+        )
+        return state
+    # ─────────────────────────────────────────────────────────────────────────
 
     state["answer"] = answer
     state["grounded"] = not any(
