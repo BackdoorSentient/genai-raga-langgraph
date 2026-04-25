@@ -1,8 +1,8 @@
 # app/agent/critic.py
-import json
 from app.agent.state import AgentState
 from app.llm.ollama_client import ollama_llm
 from app.schema import Document
+from app.utils.json_utils import extract_json      
 
 
 CRITIC_PROMPT = """
@@ -38,42 +38,32 @@ Answer: {answer}
 """
 
 
-def _extract_json(text: str) -> dict:
-    if not text:
-        raise ValueError("Empty critic output")
-
-    text = text.strip()
-
-    if text.startswith("```"):
-        text = text.replace("```json", "").replace("```", "").strip()
-
-    start = text.find("{")
-    end = text.rfind("}")
-
-    if start == -1 or end == -1 or end <= start:
-        raise ValueError("No JSON object found")
-
-    return json.loads(text[start:end + 1])
-
-
 def critic_node(state: AgentState) -> AgentState:
-    # Build origins list from Document objects
     origins = list({
         d.origin
         for d in state.get("documents", [])
         if isinstance(d, Document)
     })
 
-    response = ollama_llm.generate(
-        CRITIC_PROMPT.format(
-            query=state.get("query", ""),
-            origins=", ".join(origins) if origins else "none",
-            answer=state.get("answer", "")
+    try:
+        response = ollama_llm.generate(
+            CRITIC_PROMPT.format(
+                query=state.get("query", ""),
+                origins=", ".join(origins) if origins else "none",
+                answer=state.get("answer", "")
+            )
         )
-    )
+    except Exception as exc:
+        state["critic_decision"] = "retry"
+        state["critic_reason"] = f"LLM unavailable: {exc}"
+        state["grounded"] = False
+        state.setdefault("steps", []).append(
+            "CriticNode → LLM failed, defaulting to retry"
+        )
+        return state
 
     try:
-        parsed = _extract_json(response)
+        parsed = extract_json(response)            
         decision = parsed.get("decision", "retry")
         reason = parsed.get("reason", "")
 
@@ -86,7 +76,6 @@ def critic_node(state: AgentState) -> AgentState:
 
     state["critic_decision"] = decision
     state["critic_reason"] = reason
-
     state["grounded"] = (
         decision == "accept"
         and bool(state.get("documents"))
