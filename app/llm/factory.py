@@ -1,7 +1,5 @@
 from app.llm.ollama_client import OllamaClient
-from app.config.settings import get_settings
-
-settings = get_settings()
+from app.config.settings import settings
 
 def get_llm():
     """

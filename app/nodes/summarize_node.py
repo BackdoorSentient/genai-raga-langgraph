@@ -1,17 +1,19 @@
+# app/nodes/summarize_node.py
 from app.agent.state import AgentState
 from app.llm.ollama_client import ollama_llm
+from app.schema import Document
 
 
 SYSTEM_PROMPT = """
-You are answering a factual question using ONLY the provided documents.
+You are a factual question answering assistant.
 
 RULES:
-- Use ONLY information present in the documents
-- Do NOT add external knowledge
-- If multiple facts are present, COMBINE them into a clear explanation
-- Answer fully, not minimally
-- 2–4 sentences if possible
-- If information is missing, say so clearly
+- Answer ONLY using the provided documents
+- If the documents do not contain a clear, direct, authoritative answer to the question — respond with exactly: "I don't have reliable information about this."
+- Do NOT speculate or combine loosely related facts to construct an answer
+- Do NOT treat social media follower counts, unrelated mentions, or tangential references as authoritative answers
+- Do NOT answer questions about specific private individuals unless a clearly authoritative source is in the documents
+- 2-4 sentences maximum when you do have an answer
 """
 
 
@@ -20,19 +22,23 @@ def summarize_node(state: AgentState) -> AgentState:
     query = state.get("query", "")
 
     if not documents:
-        state["answer"] = "No grounded information found."
+        state["answer"] = "I don't have reliable information about this."
         state["grounded"] = False
         state["confidence"] = 0.0
         return state
 
-    context_chunks = [
-        d.get("content", "")
-        for d in documents
-        if isinstance(d, dict) and d.get("content")
-    ]
+    context_chunks = []
+    for d in documents:
+        if isinstance(d, Document):
+            if d.content:
+                context_chunks.append(d.content)    # ← was: d.get("content") on a dict — always failed
+        elif isinstance(d, dict):                   # safety fallback
+            text = d.get("content", "")
+            if text:
+                context_chunks.append(text)
 
     if not context_chunks:
-        state["answer"] = "No usable grounded content found."
+        state["answer"] = "I don't have reliable information about this."
         state["grounded"] = False
         state["confidence"] = 0.0
         return state
@@ -48,7 +54,7 @@ Question:
 Documents:
 {context}
 
-Answer (definition + explanation):
+Answer:
 """
 
     answer = ollama_llm.generate(prompt)
@@ -56,7 +62,12 @@ Answer (definition + explanation):
     state["answer"] = answer
     state["grounded"] = not any(
         phrase in answer.lower()
-        for phrase in ["i don't know", "not found", "no information"]
+        for phrase in [
+            "i don't know",
+            "not found",
+            "no information",
+            "i don't have reliable information",
+        ]
     )
     state["confidence"] = min(0.95, 0.5 + len(documents) * 0.1)
 
