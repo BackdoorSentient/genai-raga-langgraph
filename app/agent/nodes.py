@@ -3,9 +3,19 @@ from app.agent.state import AgentState
 
 
 def refine_query(state: AgentState, llm) -> AgentState:
-    refined = llm.invoke(
-        f"Rewrite this query for better document retrieval:\n{state['query']}"
-    )
+    # ── Issue B: wrap LLM call ────────────────────────────────────────────────
+    try:
+        refined = llm.invoke(
+            f"Rewrite this query for better document retrieval:\n{state['query']}"
+        )
+    except Exception as exc:
+        refined = state["query"]    # fallback: use original query unchanged
+        state.setdefault("observations", []).append({
+            "node": "refine_query",
+            "error": f"LLM unavailable: {exc}",
+            "fallback": "original query used"
+        })
+    # ─────────────────────────────────────────────────────────────────────────
 
     state["steps"].append("Query refined")
 
@@ -18,7 +28,6 @@ def refine_query(state: AgentState, llm) -> AgentState:
 def retrieve_docs(state: AgentState, vector_store) -> AgentState:
     query = state["refined_query"] or state["query"]
     docs = vector_store.search(query, k=4)
-    # docs is now List[Document] — .source is a typed field, not a dict key
     sources = [doc.source for doc in docs]
 
     state["steps"].append(f"Retrieved {len(docs)} documents")
@@ -34,7 +43,6 @@ def generate_answer(state: AgentState, llm) -> AgentState:
             "citations": [],
         }
 
-    # .page_content works via the @property shim on Document
     context = "\n\n".join(doc.page_content for doc in state["documents"])
 
     prompt = f"""
@@ -48,7 +56,16 @@ def generate_answer(state: AgentState, llm) -> AgentState:
     {state["query"]}
     """
 
-    answer = llm.invoke(prompt)
+    # ── Issue B: wrap LLM call ────────────────────────────────────────────────
+    try:
+        answer = llm.invoke(prompt)
+    except Exception as exc:
+        answer = "I could not generate an answer due to a system error."
+        state.setdefault("observations", []).append({
+            "node": "generate_answer",
+            "error": f"LLM unavailable: {exc}"
+        })
+    # ─────────────────────────────────────────────────────────────────────────
 
     state["steps"].append("Answer generated")
 
@@ -60,7 +77,6 @@ def generate_answer(state: AgentState, llm) -> AgentState:
 
 
 def validate_answer(state: AgentState, llm) -> AgentState:
-    # .page_content works via the @property shim on Document
     context = "\n\n".join(doc.page_content for doc in state["documents"])
 
     prompt = f"""
@@ -76,7 +92,22 @@ def validate_answer(state: AgentState, llm) -> AgentState:
     CONFIDENCE: <0 to 1>
     """
 
-    result = llm.invoke(prompt)
+    # ── Issue B: wrap LLM call ────────────────────────────────────────────────
+    try:
+        result = llm.invoke(prompt)
+    except Exception as exc:
+        state.setdefault("observations", []).append({
+            "node": "validate_answer",
+            "error": f"LLM unavailable: {exc}"
+        })
+        state["steps"].append("Answer validated — LLM failed, defaulting grounded=False")
+        return {
+            **state,
+            "grounded": False,
+            "confidence": 0.0,
+            # ── Issue A: NO retry_count here — router_node owns it ────────────
+        }
+    # ─────────────────────────────────────────────────────────────────────────
 
     grounded = "GROUNDED: YES" in result.upper()
 
@@ -88,14 +119,12 @@ def validate_answer(state: AgentState, llm) -> AgentState:
     if not grounded:
         confidence = 0.0
 
-    retry_count = state["retry_count"] + (0 if grounded else 1)
-
     state["steps"].append("Answer validated")
 
     return {
         **state,
         "grounded": grounded,
         "confidence": confidence,
-        "retry_count": retry_count,
-        "citations": state["citations"],
+        # ── Issue A: retry_count removed — router_node is the single authority
+        #    that increments it. Having it here too caused premature exit. ─────
     }
