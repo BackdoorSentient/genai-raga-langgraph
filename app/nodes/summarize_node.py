@@ -1,6 +1,6 @@
 # app/nodes/summarize_node.py
 from app.agent.state import AgentState
-from app.llm.ollama_client import ollama_llm
+from app.llm.factory import get_llm          # ← Issue E: was: from app.llm.ollama_client import ollama_llm
 from app.schema import Document
 
 
@@ -58,7 +58,8 @@ Answer:
 """
 
     try:
-        answer = ollama_llm.generate(prompt)
+        llm = get_llm()                      # ← Issue E: factory call, respects LLM_PROVIDER in .env
+        answer = llm.generate(prompt)
     except Exception as exc:
         state["answer"] = "I don't have reliable information about this."
         state["grounded"] = False

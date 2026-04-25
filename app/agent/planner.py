@@ -1,7 +1,7 @@
 # app/agent/planner.py
-from app.llm.ollama_client import ollama_llm
+from app.llm.factory import get_llm          # ← Issue E: was: from app.llm.ollama_client import ollama_llm
 from app.agent.state import AgentState
-from app.utils.json_utils import extract_json          
+from app.utils.json_utils import extract_json
 
 
 PLANNER_PROMPT = """
@@ -42,7 +42,8 @@ def planner_node(state: AgentState) -> AgentState:
         raise ValueError("Planner → goal missing")
 
     try:
-        response = ollama_llm.generate(
+        llm = get_llm()                      # ← Issue E: factory call, respects LLM_PROVIDER in .env
+        response = llm.generate(
             PLANNER_PROMPT.format(goal=goal)
         )
     except Exception as exc:
@@ -62,7 +63,7 @@ def planner_node(state: AgentState) -> AgentState:
         return state
 
     try:
-        parsed = extract_json(response)           
+        parsed = extract_json(response)
         steps = parsed.get("steps")
 
         if not isinstance(steps, list) or not all(

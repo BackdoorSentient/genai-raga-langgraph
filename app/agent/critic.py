@@ -1,6 +1,6 @@
 # app/agent/critic.py
 from app.agent.state import AgentState
-from app.llm.ollama_client import ollama_llm
+from app.llm.factory import get_llm          # ← Issue E: was: from app.llm.ollama_client import ollama_llm
 from app.schema import Document
 from app.utils.json_utils import extract_json
 
@@ -46,7 +46,8 @@ def critic_node(state: AgentState) -> AgentState:
     })
 
     try:
-        response = ollama_llm.generate(
+        llm = get_llm()                      # ← Issue E: factory call, respects LLM_PROVIDER in .env
+        response = llm.generate(
             CRITIC_PROMPT.format(
                 query=state.get("query", ""),
                 origins=", ".join(origins) if origins else "none",
