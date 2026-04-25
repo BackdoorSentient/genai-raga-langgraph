@@ -9,11 +9,11 @@ You are a factual question answering assistant.
 
 RULES:
 - Answer ONLY using the provided documents
-- If the documents do not contain a clear, direct, authoritative answer to the question — respond with exactly: "I don't have reliable information about this."
-- Do NOT speculate or combine loosely related facts to construct an answer
-- Do NOT treat social media follower counts, unrelated mentions, or tangential references as authoritative answers
-- Do NOT answer questions about specific private individuals unless a clearly authoritative source is in the documents
-- 2-4 sentences maximum when you do have an answer
+- Use ALL relevant information from the documents to construct a complete answer
+- For questions about people, use any available information from web sources — LinkedIn, news articles, company pages, social media bios are all valid sources
+- If the documents contain partial information, combine them into the best possible answer
+- If the documents contain truly no relevant information at all — respond with exactly: "I don't have reliable information about this."
+- Be specific and factual — 3-5 sentences
 """
 
 
@@ -31,7 +31,7 @@ def summarize_node(state: AgentState) -> AgentState:
     for d in documents:
         if isinstance(d, Document):
             if d.content:
-                context_chunks.append(d.content)
+                context_chunks.append(f"[Source: {d.source}]\n{d.content}")
         elif isinstance(d, dict):
             text = d.get("content", "")
             if text:
@@ -57,7 +57,6 @@ Documents:
 Answer:
 """
 
-    # ── Issue 11: wrap LLM call, never crash on Ollama failure ───────────────
     try:
         answer = ollama_llm.generate(prompt)
     except Exception as exc:
@@ -72,7 +71,6 @@ Answer:
             "SummarizeNode → LLM failed, returning fallback"
         )
         return state
-    # ─────────────────────────────────────────────────────────────────────────
 
     state["answer"] = answer
     state["grounded"] = not any(

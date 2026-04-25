@@ -2,29 +2,29 @@
 from app.agent.state import AgentState
 from app.llm.ollama_client import ollama_llm
 from app.schema import Document
-from app.utils.json_utils import extract_json      
+from app.utils.json_utils import extract_json
 
 
 CRITIC_PROMPT = """
-You are a strict relevance evaluator.
+You are a relevance evaluator.
 
 RULES:
 - Output MUST be valid JSON
 - NO markdown, NO explanations
 - Start with '{{' and end with '}}'
 
-Evaluate whether the answer DIRECTLY and SPECIFICALLY answers the question asked.
+Evaluate whether the answer addresses the question asked.
+
 Reasons to choose RETRY:
-- Answer is vague or generic
-- Answer is about a different topic than the question
-- Answer pulls from unrelated documents
-- Answer contains social media stats for a person query without authoritative source
-- Answer says it does not have information
+- Answer is completely off-topic
+- Answer is empty or says only "I don't know"
+- Answer is about a completely different subject
 
 Reasons to choose ACCEPT:
-- Answer directly addresses the question
-- Answer is grounded in relevant retrieved content
-- Answer is specific and factual
+- Answer directly addresses the question using retrieved content
+- Answer is grounded in web or vector sources
+- Answer provides relevant information about the topic, even if partial
+- For person queries — answer uses LinkedIn, news, company pages, or social profiles
 
 Return ONLY:
 {{
@@ -63,7 +63,7 @@ def critic_node(state: AgentState) -> AgentState:
         return state
 
     try:
-        parsed = extract_json(response)            
+        parsed = extract_json(response)
         decision = parsed.get("decision", "retry")
         reason = parsed.get("reason", "")
 
