@@ -1,10 +1,15 @@
-import requests
+# app/utils/ollama.py
+import httpx                                   
 
-OLLAMA_URL = "http://127.0.0.1:11434"
+from app.config.settings import get_settings
+
+settings = get_settings()
+
 
 def is_ollama_running() -> bool:
     try:
-        res = requests.get(OLLAMA_URL, timeout=2)
+        with httpx.Client(timeout=2, trust_env=False) as client:
+            res = client.get(settings.OLLAMA_BASE_URL)  
         return res.status_code == 200
     except Exception:
         return False
