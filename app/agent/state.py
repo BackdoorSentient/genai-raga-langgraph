@@ -1,37 +1,38 @@
-from typing import TypedDict, List, Any, Literal
+# app/agent/state.py
+from typing import TypedDict, List, Any, Optional
 
 
 class AgentState(TypedDict, total=False):
-    # -------- Core --------
+    # Core
     query: str
-    refined_query: str
-    answer: str
-    documents: List[Any]
-    grounded: bool
-    confidence: float
-    citations: List[str]
-
-    # -------- Planning --------
     goal: str
+    refined_query: str
+
+    # Planning
     plan: List[str]
+    search_queries: List[str]          # ← new: planner-generated search queries
     current_step: int
 
-    # -------- Control --------
-    phase: Literal["retrieve", "summarize", "critic", "end"]
-    next_node: str
+    # Documents
+    documents: List[Any]
+    citations: List[str]
 
-    # -------- Retrieval flags --------
+    # Answer
+    answer: str
+    grounded: bool
+    confidence: float
+
+    # Retry control
+    retry_count: int
+    max_retries: int
+    phase: str
     used_vector: bool
     used_web: bool
 
-    # -------- Retry --------
-    retry_count: int
-    max_retries: int
-
-    # -------- Observability --------
-    observations: List[Any]
-    steps: List[str]
-
-    # -------- Critic --------
-    critic_decision: Literal["accept", "retry"]
+    # Critic
+    critic_decision: str
     critic_reason: str
+
+    # Observability
+    steps: List[str]
+    observations: List[dict]

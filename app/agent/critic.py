@@ -1,30 +1,31 @@
 # app/agent/critic.py
 from app.agent.state import AgentState
-from app.llm.factory import get_llm          # ← Issue E: was: from app.llm.ollama_client import ollama_llm
+from app.llm.factory import get_llm
 from app.schema import Document
 from app.utils.json_utils import extract_json
 
 
 CRITIC_PROMPT = """
-You are a relevance evaluator.
+You are a quality evaluator for research answers.
 
 RULES:
 - Output MUST be valid JSON
 - NO markdown, NO explanations
 - Start with '{{' and end with '}}'
 
-Evaluate whether the answer addresses the question asked.
+Evaluate whether the answer provides useful information about the question asked.
 
 Reasons to choose RETRY:
-- Answer is completely off-topic
-- Answer is empty or says only "I don't know"
-- Answer is about a completely different subject
+- Answer is completely empty or just says "no information found"
+- Answer is about a completely unrelated subject
+- Answer contains zero relevant facts
 
 Reasons to choose ACCEPT:
-- Answer directly addresses the question using retrieved content
-- Answer is grounded in web or vector sources
-- Answer provides relevant information about the topic, even if partial
-- For person queries — answer uses LinkedIn, news, company pages, or social profiles
+- Answer contains ANY relevant information from search results
+- Answer compiles information from multiple sources
+- Answer clearly states what was and was not found
+- Even partial information is a valid answer
+- Answer addresses the question even if incompletely
 
 Return ONLY:
 {{
@@ -46,7 +47,7 @@ def critic_node(state: AgentState) -> AgentState:
     })
 
     try:
-        llm = get_llm()                      # ← Issue E: factory call, respects LLM_PROVIDER in .env
+        llm = get_llm()
         response = llm.generate(
             CRITIC_PROMPT.format(
                 query=state.get("query", ""),

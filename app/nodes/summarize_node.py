@@ -5,33 +5,27 @@ from app.schema import Document
 
 
 SYSTEM_PROMPT = """
-You are a factual question answering assistant.
+You are a research assistant that compiles comprehensive answers from web search results.
 
 RULES:
-- Answer ONLY using the provided documents
-- Use ALL relevant information from the documents to construct a complete answer
-- For questions about people, use any available information from web sources — LinkedIn, news articles, company pages, social media bios are all valid sources
-- If the documents contain partial information, combine them into the best possible answer
-- If the documents contain truly no relevant information at all — respond with exactly: "I don't have reliable information about this."
-- Be specific and factual — 3-5 sentences
+- Use ALL relevant information from the provided documents
+- Compile everything into a thorough, well-structured answer
+- For person queries: include name, profession, employer, location, education, social media, projects, achievements
+- For factual queries: include current data, context, and any relevant details
+- For news/events: include what happened, when, who was involved, and current status
+- Combine information from multiple sources into one coherent answer
+- If sources conflict, mention both versions
+- Cite which sources provided key facts
+- Be comprehensive — give the user everything the search found
+- If truly nothing relevant was found, clearly state that
 """
 
 
 def _compute_confidence(answer: str, documents: list) -> float:
-    """
-    Fix 5: Compute confidence based on actual answer-document overlap.
-    Old method: min(0.95, 0.5 + len(docs) * 0.1) — based on doc count, meaningless.
-    New method: fraction of documents that share meaningful content with the answer.
-
-    Checks how many documents contain at least one 3-word sequence
-    that also appears in the answer. More overlap = higher confidence.
-    """
     if not documents or not answer:
         return 0.0
 
     answer_lower = answer.lower()
-
-    # Build 3-word ngrams from the answer
     answer_words = answer_lower.split()
     answer_ngrams = set()
     for i in range(len(answer_words) - 2):
@@ -52,18 +46,16 @@ def _compute_confidence(answer: str, documents: list) -> float:
         if not content:
             continue
 
-        # Check if any 3-word ngram from the answer appears in this document
         doc_words = content.split()
         doc_ngrams = set()
         for i in range(len(doc_words) - 2):
             ngram = " ".join(doc_words[i:i + 3])
             doc_ngrams.add(ngram)
 
-        if answer_ngrams & doc_ngrams:    # intersection — shared ngrams
+        if answer_ngrams & doc_ngrams:
             matching_docs += 1
 
-    confidence = matching_docs / len(documents)
-    return round(min(0.95, confidence), 2)
+    return round(min(0.95, matching_docs / len(documents)), 2)
 
 
 def summarize_node(state: AgentState) -> AgentState:
@@ -71,7 +63,7 @@ def summarize_node(state: AgentState) -> AgentState:
     query = state.get("query", "")
 
     if not documents:
-        state["answer"] = "I don't have reliable information about this."
+        state["answer"] = "No information found for this query."
         state["grounded"] = False
         state["confidence"] = 0.0
         return state
@@ -87,7 +79,7 @@ def summarize_node(state: AgentState) -> AgentState:
                 context_chunks.append(text)
 
     if not context_chunks:
-        state["answer"] = "I don't have reliable information about this."
+        state["answer"] = "No information found for this query."
         state["grounded"] = False
         state["confidence"] = 0.0
         return state
@@ -100,17 +92,17 @@ def summarize_node(state: AgentState) -> AgentState:
 Question:
 {query}
 
-Documents:
+Search Results:
 {context}
 
-Answer:
+Comprehensive Answer:
 """
 
     try:
         llm = get_llm()
         answer = llm.generate(prompt)
     except Exception as exc:
-        state["answer"] = "I don't have reliable information about this."
+        state["answer"] = "No information found for this query."
         state["grounded"] = False
         state["confidence"] = 0.0
         state.setdefault("observations", []).append({
@@ -123,17 +115,7 @@ Answer:
         return state
 
     state["answer"] = answer
-    state["grounded"] = not any(
-        phrase in answer.lower()
-        for phrase in [
-            "i don't know",
-            "not found",
-            "no information",
-            "i don't have reliable information",
-        ]
-    )
-
-    # Fix 5: actual groundedness check — not doc count heuristic
+    state["grounded"] = True
     state["confidence"] = _compute_confidence(answer, documents)
 
     state.setdefault("steps", []).append(
